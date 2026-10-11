@@ -3045,6 +3045,16 @@ export default function RegisterComplaintPage() {
                         <label className="text-xs font-semibold text-slate-700">
                           Complainant Full Name *
                         </label>
+                        <VoiceInputButton
+                          onTranscript={(val) => {
+                            handleComplainantChange(idx, "name", val);
+                            if (idx === 0) markFieldAsEdited("complainantName");
+                          }}
+                          currentValue={comp.name}
+                          fieldLabel="Complainant Name"
+                          preferredLang={voiceLang}
+                          iconOnly={true}
+                        />
                       </div>
                       <input
                         type="text"
@@ -3107,6 +3117,16 @@ export default function RegisterComplaintPage() {
                         <label className="text-xs font-semibold text-slate-700">
                           Relative Name {comp.relationType ? `(${comp.relationType})` : ""}
                         </label>
+                        <VoiceInputButton
+                          onTranscript={(val) => {
+                            handleComplainantChange(idx, "relativeName", val);
+                            if (idx === 0) markFieldAsEdited("complainantRelativeName");
+                          }}
+                          currentValue={comp.relativeName || ""}
+                          fieldLabel="Relative Name"
+                          preferredLang={voiceLang}
+                          iconOnly={true}
+                        />
                       </div>
                       <input
                         type="text"
@@ -3232,6 +3252,16 @@ export default function RegisterComplaintPage() {
                           <label className="text-xs font-semibold text-slate-700">
                             Address (House / Street / Mohalla) *
                           </label>
+                          <VoiceInputButton
+                            onTranscript={(val) => {
+                              handleComplainantChange(idx, "presentAddress", val);
+                              if (idx === 0) markFieldAsEdited("complainantPresentAddress");
+                            }}
+                            currentValue={comp.presentAddress}
+                            fieldLabel="Present Address"
+                            preferredLang={voiceLang}
+                            iconOnly={true}
+                          />
                         </div>
                         <input
                           type="text"
@@ -3262,6 +3292,16 @@ export default function RegisterComplaintPage() {
                           <label className="text-xs font-semibold text-slate-700">
                             Village / City *
                           </label>
+                          <VoiceInputButton
+                            onTranscript={(val) => {
+                              handleComplainantChange(idx, "presentCity", val);
+                              if (idx === 0) markFieldAsEdited("complainantPresentCity");
+                            }}
+                            currentValue={comp.presentCity}
+                            fieldLabel="Village / City"
+                            preferredLang={voiceLang}
+                            iconOnly={true}
+                          />
                         </div>
                         <input
                           type="text"
@@ -3292,6 +3332,16 @@ export default function RegisterComplaintPage() {
                           <label className="text-xs font-semibold text-slate-700">
                             District *
                           </label>
+                          <VoiceInputButton
+                            onTranscript={(val) => {
+                              handleComplainantChange(idx, "presentDistrict", val);
+                              if (idx === 0) markFieldAsEdited("complainantPresentDistrict");
+                            }}
+                            currentValue={comp.presentDistrict}
+                            fieldLabel="District"
+                            preferredLang={voiceLang}
+                            iconOnly={true}
+                          />
                         </div>
                         <input
                           type="text"
@@ -3322,6 +3372,16 @@ export default function RegisterComplaintPage() {
                           <label className="text-xs font-semibold text-slate-700">
                             State *
                           </label>
+                          <VoiceInputButton
+                            onTranscript={(val) => {
+                              handleComplainantChange(idx, "presentState", val);
+                              if (idx === 0) markFieldAsEdited("complainantPresentState");
+                            }}
+                            currentValue={comp.presentState}
+                            fieldLabel="State"
+                            preferredLang={voiceLang}
+                            iconOnly={true}
+                          />
                         </div>
                         <input
                           type="text"
@@ -3381,6 +3441,17 @@ export default function RegisterComplaintPage() {
                         <label className="text-xs font-semibold text-slate-700">
                           Mobile Number {comp.nationalityChoice === "Indian" ? "(Strictly 10 Digits)" : "(Contact Phone)"} *
                         </label>
+                        <VoiceInputButton
+                          onTranscript={(val) => {
+                            const cleanNum = val.replace(/\D/g, "");
+                            handleComplainantChange(idx, "mobile", cleanNum || val);
+                            if (idx === 0) markFieldAsEdited("complainantMobile");
+                          }}
+                          currentValue={comp.mobile}
+                          fieldLabel="Mobile Number"
+                          preferredLang={voiceLang}
+                          iconOnly={true}
+                        />
                       </div>
                       <div className="max-w-md flex items-center gap-2">
                         {comp.nationalityChoice === "Indian" ? (
@@ -3466,9 +3537,18 @@ export default function RegisterComplaintPage() {
                         <h6 className="text-xs font-bold text-slate-800">Permanent Address (All fields mandatory) *</h6>
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                           <div className="sm:col-span-12">
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Permanent Address (House / Street / Mohalla) *
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-700">
+                                Permanent Address (House / Street / Mohalla) *
+                              </label>
+                              <VoiceInputButton
+                                onTranscript={(val) => handleComplainantChange(idx, "permanentAddress", val)}
+                                currentValue={comp.permanentAddress}
+                                fieldLabel="Permanent Address"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
+                            </div>
                             <input
                               type="text"
                               value={comp.permanentAddress}
@@ -3488,7 +3568,16 @@ export default function RegisterComplaintPage() {
                           </div>
 
                           <div className="sm:col-span-3">
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">Permanent Village / City *</label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-700">Permanent Village / City *</label>
+                              <VoiceInputButton
+                                onTranscript={(val) => handleComplainantChange(idx, "permanentCity", val)}
+                                currentValue={comp.permanentCity}
+                                fieldLabel="Permanent Village / City"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
+                            </div>
                             <input
                               type="text"
                               value={comp.permanentCity}
@@ -3506,7 +3595,16 @@ export default function RegisterComplaintPage() {
                             )}
                           </div>
                           <div className="sm:col-span-3">
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">District *</label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-700">District *</label>
+                              <VoiceInputButton
+                                onTranscript={(val) => handleComplainantChange(idx, "permanentDistrict", val)}
+                                currentValue={comp.permanentDistrict}
+                                fieldLabel="Permanent District"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
+                            </div>
                             <input
                               type="text"
                               value={comp.permanentDistrict}
@@ -3524,7 +3622,16 @@ export default function RegisterComplaintPage() {
                             )}
                           </div>
                           <div className="sm:col-span-3">
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">State *</label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-700">State *</label>
+                              <VoiceInputButton
+                                onTranscript={(val) => handleComplainantChange(idx, "permanentState", val)}
+                                currentValue={comp.permanentState}
+                                fieldLabel="Permanent State"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
+                            </div>
                             <input
                               type="text"
                               value={comp.permanentState}
@@ -3670,6 +3777,16 @@ export default function RegisterComplaintPage() {
                               <label className="text-xs font-semibold text-slate-700">
                                 Accused Name *
                               </label>
+                              <VoiceInputButton
+                                onTranscript={(val) => {
+                                  handleAccusedChange(idx, "name", val);
+                                  markFieldAsEdited(`accused_${idx}_name`);
+                                }}
+                                currentValue={acc.name}
+                                fieldLabel="Accused Name"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
                             </div>
                             <input
                               type="text"
@@ -3699,6 +3816,16 @@ export default function RegisterComplaintPage() {
                               <label className="text-xs font-semibold text-slate-700">
                                 Accused Address *
                               </label>
+                              <VoiceInputButton
+                                onTranscript={(val) => {
+                                  handleAccusedChange(idx, "address", val);
+                                  markFieldAsEdited(`accused_${idx}_address`);
+                                }}
+                                currentValue={acc.address}
+                                fieldLabel="Accused Address"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
                             </div>
                             <input
                               type="text"
@@ -3728,6 +3855,17 @@ export default function RegisterComplaintPage() {
                               <label className="text-xs font-semibold text-slate-700">
                                 Contact Phone (If Known)
                               </label>
+                              <VoiceInputButton
+                                onTranscript={(val) => {
+                                  const cleanNum = val.replace(/\D/g, "");
+                                  handleAccusedChange(idx, "phone", cleanNum || val);
+                                  markFieldAsEdited(`accused_${idx}_phone`);
+                                }}
+                                currentValue={acc.phone || ""}
+                                fieldLabel="Accused Phone"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
                             </div>
                             <input
                               type="tel"
@@ -3750,6 +3888,16 @@ export default function RegisterComplaintPage() {
                               <label className="text-xs font-semibold text-slate-700">
                                 Alias / Nickname / Relation (If Known)
                               </label>
+                              <VoiceInputButton
+                                onTranscript={(val) => {
+                                  handleAccusedChange(idx, "alias", val);
+                                  markFieldAsEdited(`accused_${idx}_alias`);
+                                }}
+                                currentValue={acc.alias || ""}
+                                fieldLabel="Accused Alias / Relation"
+                                preferredLang={voiceLang}
+                                iconOnly={true}
+                              />
                             </div>
                             <input
                               type="text"
@@ -3800,6 +3948,23 @@ export default function RegisterComplaintPage() {
                     <label className="text-xs font-semibold text-slate-700">
                       (a) Place of Incident (Crime Spot) *
                     </label>
+                    <VoiceInputButton
+                      onTranscript={(val) => {
+                        setIncidentPlace(val);
+                        markFieldAsEdited("incidentPlace");
+                        if (validationErrors.incidentPlace) {
+                          setValidationErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.incidentPlace;
+                            return next;
+                          });
+                        }
+                      }}
+                      currentValue={incidentPlace}
+                      fieldLabel="Place of Incident"
+                      preferredLang={voiceLang}
+                      iconOnly={true}
+                    />
                   </div>
                   <input
                     type="text"
@@ -3946,13 +4111,22 @@ export default function RegisterComplaintPage() {
                       <label className="text-xs font-semibold text-slate-600 shrink-0">
                         Approx Period
                       </label>
-                      <input
-                        type="text"
-                        value={incidentApproxPeriod}
-                        onChange={(e) => setIncidentApproxPeriod(e.target.value)}
-                        placeholder="e.g. Occurring over past 15 days or exact date not recalled"
-                        className="w-full px-2.5 py-1.5 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0b192c]"
-                      />
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={incidentApproxPeriod}
+                          onChange={(e) => setIncidentApproxPeriod(e.target.value)}
+                          placeholder="e.g. Occurring over past 15 days or exact date not recalled"
+                          className="w-full px-2.5 py-1.5 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0b192c]"
+                        />
+                        <VoiceInputButton
+                          onTranscript={(val) => setIncidentApproxPeriod(val)}
+                          currentValue={incidentApproxPeriod}
+                          fieldLabel="Approx Period"
+                          preferredLang={voiceLang}
+                          iconOnly={true}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -3996,6 +4170,23 @@ export default function RegisterComplaintPage() {
                     <label className="text-xs font-semibold text-slate-700 truncate" title="Subject Headline">
                       Subject (Brief Headline) *
                     </label>
+                    <VoiceInputButton
+                      onTranscript={(val) => {
+                        setComplaintSubject(val);
+                        markFieldAsEdited("complaintSubject");
+                        if (validationErrors.complaintSubject) {
+                          setValidationErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.complaintSubject;
+                            return next;
+                          });
+                        }
+                      }}
+                      currentValue={complaintSubject}
+                      fieldLabel="Subject Headline"
+                      preferredLang={voiceLang}
+                      iconOnly={true}
+                    />
                   </div>
                   <input
                     type="text"
