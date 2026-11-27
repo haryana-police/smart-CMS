@@ -16,6 +16,9 @@ export const finalReportClient = {
   async review(report: ComplaintReportItem, authorId: string, action: 'VIEW_SHO' | 'APPROVE_SHO' | 'REJECT_SHO', reason?: string): Promise<ComplaintReportItem> {
     return (await request({ action, id: report.id, firId: report.complaintId, expectedVersion: report.versionNumber, authorId, reason }, 'PATCH')).report;
   },
+  async reviewSo(report: ComplaintReportItem, authorId: string, action: 'VIEW_SO' | 'APPROVE_SO' | 'REJECT_SO', reason?: string, soFinalStatus?: string): Promise<ComplaintReportItem> {
+    return (await request({ action, id: report.id, firId: report.complaintId, expectedVersion: report.versionNumber, authorId, reason, soFinalStatus }, 'PATCH')).report;
+  },
   async list(firId: string): Promise<{ reports: ComplaintReportItem[]; history: FinalReportHistoryEvent[] }> { return request(undefined, 'GET', firId); },
   async save(id: string, fir: FIRItem, data: FinalReportData, previewHtml: string, author: {id: string;name: string}, expectedVersion: number): Promise<ComplaintReportItem> {
     const snapshot = { ...fir, reports: undefined };

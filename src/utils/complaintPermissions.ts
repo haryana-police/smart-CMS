@@ -212,6 +212,13 @@ export function canDeleteDocument(
     };
   }
 
+  if ((doc as { sentToSo?: boolean }).sentToSo && isShoOrSuperior(user.role)) {
+    return {
+      allowed: false,
+      reason: "Access Denied: A report already forwarded to the Supervisory Officer cannot be deleted here.",
+    };
+  }
+
   // Strict Ownership: Only the user/ID who saved/uploaded the document/report can delete it. No one else!
   const creatorId = doc.createdByUserId || doc.authorId || (doc as any)?.userId;
   if (creatorId) {
@@ -388,6 +395,8 @@ export function canCreateShoReport(user: AuthUserContext, complaint: ComplaintIt
     complaint.shoDecision === "APPROVE" ||
     complaint.shoApprovedAt ||
     complaint.workflowState === "SENT_TO_SHO" ||
+    complaint.workflowState === "SHO_APPROVED" ||
+    complaint.workflowState === "SENT_TO_SO" ||
     complaint.workflowState === "COMPLETE" ||
     complaint.workflowState === "FIR_REGISTRATION_PENDING" ||
     complaint.status === "REPORT_SUBMITTED" ||

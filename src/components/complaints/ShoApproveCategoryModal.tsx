@@ -113,9 +113,9 @@ export function ShoApproveCategoryModal({
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-200" />
             <div>
-              <h3 className="font-bold text-sm">SHO Final Category & Approval</h3>
+              <h3 className="font-bold text-sm">SHO Review &amp; Recommendation</h3>
               <p className="text-[11px] text-emerald-100">
-                Authoritative Category Decision by Station House Officer
+                Recommendation is forwarded to the Supervisory Officer (SO) for the final decision
               </p>
             </div>
           </div>

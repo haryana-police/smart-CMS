@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { ComplaintReportItem } from '@/types';
 import { finalReportClient } from '@/services/finalReportClient';
 
-const stages = { SAVED: 'Saved — pending Send to SHO', SENT_TO_SHO: 'Pending SHO View', SHO_VIEWED: 'Pending SHO Decision', REJECTED: 'Returned to IO', UNDER_CHECKING: 'Under Checking', COMPLETED: 'Completed Cases', PARTIAL: 'Partial' } as const;
+const stages = { SAVED: 'Saved — pending Send to SHO', SENT_TO_SHO: 'Pending SHO View', SHO_VIEWED: 'Pending SHO Decision', SENT_TO_SO: 'Pending SO View', SO_VIEWED: 'Pending SO Decision', REJECTED: 'Returned to IO', UNDER_CHECKING: 'Under Checking', COMPLETED: 'Completed Cases', PARTIAL: 'Partial' } as const;
 export function FinalReportCheckingBoard({ station, district, userId }: { station: string; district?: string; userId: string }) {
   const [items, setItems] = useState<Array<{ firNumber: string; report: ComplaintReportItem }>>([]);
   const [stage, setStage] = useState<keyof typeof stages>('UNDER_CHECKING');

@@ -87,6 +87,8 @@ export type WorkflowState =
   | 'PENDING'
   | 'REPORT_READY'
   | 'SENT_TO_SHO'
+  | 'SHO_APPROVED'
+  | 'SENT_TO_SO'
   | 'RE_ENQUIRY'
   | 'CORRECTION_REQUIRED'
   | 'FIR_RECOMMENDED'
@@ -136,6 +138,8 @@ export function getMainComplaintStatus(
     directSendToFir?: boolean;
     shoDecision?: string;
     finalCategory?: string;
+    soActionRequired?: boolean;
+    soDecision?: string;
   },
   viewerRole?: string
 ): MainComplaintStatus {
@@ -163,6 +167,17 @@ export function getMainComplaintStatus(
     (complaint.workflowState === "SENT_TO_SHO" ||
       complaint.workflowState === "FIR_RECOMMENDED" ||
       complaint.status === "PENDING_SHO_REVIEW")
+  ) {
+    return "Pending";
+  }
+
+  // New two-stage approval: SHO has recommended, SO has not finalized yet.
+  if (
+    !complaint.isFirRegistered &&
+    (complaint.workflowState === "SHO_APPROVED" ||
+      complaint.workflowState === "SENT_TO_SO" ||
+      complaint.soActionRequired) &&
+    complaint.soDecision !== "APPROVE"
   ) {
     return "Pending";
   }
@@ -446,6 +461,24 @@ export interface ComplaintItem extends TransferableRecord {
   shoDecisionAt?: string;
   shoDecisionBy?: string;
   shoRemarks?: string;
+
+  // Supervisory Officer (SO/DSP subdivisional) review stage
+  isSentToSo?: boolean;
+  sentToSoAt?: string;
+  sentToSoBy?: string;
+  soName?: string;
+  soRole?: string;
+  soId?: string;
+  soActionRequired?: boolean;
+  soDecision?: 'APPROVE' | 'REJECT' | 'RE_ENQUIRY';
+  soDecisionAt?: string;
+  soDecisionBy?: string;
+  soFinalCategory?: string;
+  soRemarks?: string;
+  isFirApprovedBySo?: boolean;
+  soApprovedAt?: string;
+  soApprovedBy?: string;
+
   rejectionReason?: string;
   rejectionAt?: string;
   rejectionBy?: string;
@@ -550,7 +583,10 @@ export interface ComplaintAuditRecord {
     | 'TRANSFER_JUSTIFICATION_SUBMITTED'
     | 'EO_OUTCOME_SELECTED'
     | 'SENT_TO_SHO'
+    | 'SENT_TO_SO'
+    | 'SHO_RECOMMENDED_TO_SO'
     | 'SHO_APPROVED'
+    | 'SO_APPROVED'
     | 'SHO_RE_ENQUIRY'
     | 'SHO_REJECTED'
     | 'FIR_REGISTERED'
@@ -570,11 +606,17 @@ export interface ComplaintAuditRecord {
 export interface ComplaintReportItem {
   finalReportData?: import('@/lib/finalReport').FinalReportData;
   finalReportWorkflow?: {
-    state: 'SAVED' | 'SENT_TO_SHO' | 'SHO_VIEWED' | 'REJECTED' | 'UNDER_CHECKING' | 'COMPLETED' | 'PARTIAL';
+    state: 'SAVED' | 'SENT_TO_SHO' | 'SHO_VIEWED' | 'SENT_TO_SO' | 'SO_VIEWED' | 'REJECTED' | 'UNDER_CHECKING' | 'COMPLETED' | 'PARTIAL';
     viewedBy?: string;
     viewedAt?: string;
     reviewedBy?: string;
     reviewedAt?: string;
+    soViewedBy?: string;
+    soViewedAt?: string;
+    soApprovedBy?: string;
+    soApprovedAt?: string;
+    soFinalStatus?: string;
+    soRemarks?: string;
     rejectionReason?: string;
     assignedIoId?: string;
     assignedIoPno?: string;
@@ -629,6 +671,13 @@ export interface ComplaintReportItem {
   analysisRationale?: string;
   sentToShoAt?: string;
   sentToShoBy?: string;
+  sentToSo?: boolean;
+  sentToSoAt?: string;
+  sentToSoBy?: string;
+  soName?: string;
+  soRole?: string;
+  soRecommendation?: string;
+  soRemarks?: string;
 
   // Immutable Ownership & Transfer History
   createdByUserId?: string;
@@ -1806,6 +1855,12 @@ export interface FIRItem extends TransferableRecord {
   shoDecisionBy?: string;
   shoRemarks?: string;
   shoActionRequired?: boolean;
+  soDecision?: 'APPROVE' | 'REJECT' | 'RE_ENQUIRY';
+  soDecisionAt?: string;
+  soDecisionBy?: string;
+  soName?: string;
+  soRole?: string;
+  soRemarks?: string;
 
   // Final Form Disposal (Section 193 BNSS)
   finalFormType?: 'CHARGESHEET' | 'CLOSURE' | 'UNTRACED' | 'CANCELLED';

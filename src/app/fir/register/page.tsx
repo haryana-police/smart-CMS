@@ -2498,6 +2498,12 @@ function RegisterFIRForm({ onReset }: { onReset: () => void }) {
   const executeRegistration = async () => {
     setSubmitting(true);
     try {
+      if (linkedComplaint?.id) {
+        const existing = firService.getFirBySourceComplaintId(linkedComplaint.id);
+        if (linkedComplaint.isFirRegistered || linkedComplaint.firNumber || existing) {
+          throw new Error("FIR is already registered for this complaint. Another FIR cannot be registered.");
+        }
+      }
       const liveItem = buildCurrentFirItem();
       let created = await firService.registerFir(liveItem);
       created = await firService.synchronizeSourceComplaint(created.id);

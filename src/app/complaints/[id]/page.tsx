@@ -100,6 +100,8 @@ import { ComplaintLegalAssistant } from "@/components/complaints/ComplaintLegalA
 import { ComplaintSummaryTab } from "@/components/complaints/ComplaintSummaryTab";
 import { EoSendingToShoModal, EOCategoryOption } from "@/components/complaints/EoSendingToShoModal";
 import { ShoApproveCategoryModal, SHOCategoryOption } from "@/components/complaints/ShoApproveCategoryModal";
+import { SendReportToSoModal, type SupervisoryStatusOption } from "@/components/complaints/SendReportToSoModal";
+import { SoApproveCategoryModal } from "@/components/complaints/SoApproveCategoryModal";
 import {
   RecommendationReportType,
   RECOMMENDATION_OPTIONS_CONFIG,
@@ -527,6 +529,23 @@ export default function ComplaintProfilePage() {
   const [eoSendToShoModalOpen, setEoSendToShoModalOpen] = useState(false);
   const [selectedReportForSho, setSelectedReportForSho] = useState<ComplaintReportItem | undefined>(undefined);
 
+  // SHO -> SO forwarding / SO final decision
+  const [sendToSoModalOpen, setSendToSoModalOpen] = useState(false);
+  const [selectedReportForSo, setSelectedReportForSo] = useState<ComplaintReportItem | undefined>(undefined);
+  const [sendingReportToSo, setSendingReportToSo] = useState(false);
+  const [soApproveModalOpen, setSoApproveModalOpen] = useState(false);
+  const [isSoApproving, setIsSoApproving] = useState(false);
+
+  const COMPLAINT_SO_STATUS_OPTIONS: SupervisoryStatusOption[] = [
+    { value: "NCR", label: "NCR", description: "Non-Cognizable Report — BNSS 174" },
+    { value: "FIR_RECOMMEND", label: "FIR Recommend", description: "Sanction regular FIR registration" },
+    { value: "CLOSURE", label: "Closure", description: "Settled / civil / unsubstantiated complaint" },
+    { value: "DISPOSED_MUTUAL_ACCORD", label: "Disposed — Mutual Accord", description: "Settled between the parties" },
+    { value: "DISPOSED_CIVIL_NATURE", label: "Disposed — Civil Nature", description: "Civil dispute, no criminal offence made out" },
+    { value: "DISPOSED_UNSUBSTANTIATED", label: "Disposed — Unsubstantiated", description: "Allegations not substantiated" },
+    { value: "OTHER", label: "Other existing complaint status", description: "Use another approved disposal status" },
+  ];
+
   useEscapeKey(moreActionsOpen, () => setMoreActionsOpen(false));
   useEscapeKey(generateDocDropdownOpen, () => setGenerateDocDropdownOpen(false));
   useEscapeKey(generateReportDropdownOpen, () => setGenerateReportDropdownOpen(false));
@@ -547,6 +566,8 @@ export default function ComplaintProfilePage() {
   useEscapeKey(Boolean(previewModalFile), () => setPreviewModalFile(null));
   useEscapeKey(shoReEnquiryModalOpen, () => setShoReEnquiryModalOpen(false));
   useEscapeKey(shoRejectModalOpen, () => setShoRejectModalOpen(false));
+  useEscapeKey(sendToSoModalOpen && !sendingReportToSo, () => setSendToSoModalOpen(false));
+  useEscapeKey(soApproveModalOpen && !isSoApproving, () => setSoApproveModalOpen(false));
 
   const handleUploadReportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -757,6 +778,28 @@ export default function ComplaintProfilePage() {
   const canViewConfidentialDossier = isEoPersona || currentUser.role === "SP_DISTRICT" || currentUser.role === "SUPER_ADMIN";
   const isDirectFirCase = Boolean(complaint?.directSendToFir || complaint?.status === "FIR_REGISTER" || complaint?.workflowState === "FIR_REGISTER");
   const isUnassigned = (!complaint?.assignedEoName || complaint?.status === "REGISTERED") && !isDirectFirCase;
+
+  const isSoReviewPending = Boolean(
+    complaint &&
+      !complaint.isFirRegistered &&
+      (complaint.workflowState === "SENT_TO_SO" || complaint.isSentToSo) &&
+      complaint.shoDecision === "APPROVE" &&
+      !complaint.soDecision
+  );
+  const isSo = isSuperior && !isMhc;
+  // Legacy complaints approved by the SHO before the SO stage remain valid;
+  // new complaints require SO approval before FIR/NCR/closure actions.
+  const isFinalApproved = Boolean(
+    complaint &&
+      (complaint.soDecision === "APPROVE" ||
+        (complaint.isFirApprovedBySho && !complaint.isSentToSo))
+  );
+  const finalFirRecommended = Boolean(
+    complaint &&
+      isFinalApproved &&
+      ((complaint.soFinalCategory || complaint.finalCategory || complaint.shoFinalCategory || "").toUpperCase().includes("FIR") ||
+        complaint.isFirApprovedBySho)
+  );
 
   // Centralized Permissions
   const docCreationPerm = complaint ? canCreateDocument(currentUser, complaint) : { allowed: false };
@@ -1260,38 +1303,87 @@ export default function ComplaintProfilePage() {
       setComplaint(updated);
       setShoApproveRemarks("");
       setShoApproveModalOpen(false);
-      // Map selected category to recommendation type for report auto-generation workspace
-      const recType =
-        data.finalCategory === "FIR_RECOMMEND"
-          ? "FIR"
-          : data.finalCategory === "NCR"
-          ? "NCR"
-          : "RAZINAMA";
-
       const shoReport = (updated.reports || []).find(
         (r) => r.createdByRole === "SHO" || r.officerName === currentUser.name
       );
 
-      if (data.finalCategory === "CLOSURE") {
-        alert("Enquiry report approved with final category: Closure. Complaint marked Complete and Roznamcha GD entry sent to Auto Suggestions & Drafts for Munshi (MHC).");
-      } else if (data.finalCategory === "NCR") {
-        alert(`जांच रिपोर्ट NCR श्रेणी में स्वीकृत की गई। रोजनामचा GD इंद्राज सुझाव Smart General Diary के "Auto-Suggestions & Drafts" में भेज दिया गया है। अब SHO पर्यवेक्षीय आख्या खोली जा रही है।`);
-      } else if (data.finalCategory === "FIR_RECOMMEND") {
-        alert(`जांच रिपोर्ट FIR Recommend श्रेणी में स्वीकृत की गई। रोजनामचा GD इंद्राज सुझाव Smart General Diary के "Auto-Suggestions & Drafts" में भेज दिया गया है। अब SHO पर्यवेक्षीय आख्या खोली जा रही है।`);
-      } else {
-        alert(`जांच रिपोर्ट ${displayCat} श्रेणी में स्वीकृत की गई। SHO पर्यवेक्षीय आदेश (${displayCat}) स्वतः तैयार कर दिया गया है। अब SHO रिपोर्ट जनरेटर खोला जा रहा है।`);
-      }
-
-      let draftUrl = `/enquiry-workspace/drafts?complaintId=${encodeURIComponent(complaint.id)}&recommendation=${encodeURIComponent(recType)}&shoReport=true`;
+      alert(`SHO recommendation recorded: ${displayCat}. The SHO supervisory report has been generated. Click “Send To SO” on that report in the Reports tab to forward it for the final decision.`);
+      setActiveTab("reports");
       if (shoReport?.id) {
-        draftUrl += `&reportId=${encodeURIComponent(shoReport.id)}`;
+        setSelectedReportForSo(shoReport);
       }
-      router.push(draftUrl);
     } catch (err) {
       console.error(err);
       alert("Failed to approve report.");
     } finally {
       setIsShoApproving(false);
+    }
+  };
+
+  const handleOpenShoSendToSoModal = (report: ComplaintReportItem) => {
+    if (!isSho || isMhc) {
+      alert("Access Denied: Only the SHO can forward the supervisory report to SO.");
+      return;
+    }
+    setSelectedReportForSo(report);
+    setSendToSoModalOpen(true);
+  };
+
+  const handleShoSendToSoSubmit = async (data: {
+    status: string;
+    remarks: string;
+    soName: string;
+    soRole: string;
+    soId: string;
+  }) => {
+    if (!complaint) return;
+    setSendingReportToSo(true);
+    try {
+      const updated = await ComplaintService.sendReportToSo(
+        complaint.id,
+        currentUser.name || "Station House Officer",
+        currentUser.pno || "HR-04291882",
+        {
+          status: data.status,
+          remarks: data.remarks,
+          soName: data.soName,
+          soRole: data.soRole,
+          soId: data.soId,
+          reportId: selectedReportForSo?.id,
+        }
+      );
+      setComplaint(updated);
+      setSendToSoModalOpen(false);
+      alert(`SHO report forwarded to ${data.soName}. Awaiting SO final decision (${data.status}).`);
+      await loadComplaint();
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to send report to SO.");
+    } finally {
+      setSendingReportToSo(false);
+    }
+  };
+
+  const handleSoApproveSubmit = async (data: { finalCategory: string; remarks: string }) => {
+    if (!complaint) return;
+    setIsSoApproving(true);
+    try {
+      const updated = await ComplaintService.soApprove(
+        complaint.id,
+        currentUser.name || "Supervisory Officer",
+        currentUser.pno || "04291882",
+        data.remarks,
+        data.finalCategory
+      );
+      setComplaint(updated);
+      setSoApproveModalOpen(false);
+      alert(`SO final decision recorded: ${data.finalCategory}. ${data.finalCategory.toUpperCase().includes("FIR") ? "FIR registration is now available." : "Complaint has been finalized."}`);
+      await loadComplaint();
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to record SO decision.");
+    } finally {
+      setIsSoApproving(false);
     }
   };
 
@@ -2513,11 +2605,50 @@ export default function ComplaintProfilePage() {
         </div>
       )}
 
+      {/* SO REVIEW BANNER: SHO report forwarded for final decision */}
+      {isSoReviewPending && isSo && !isMhc && (
+        <div className="bg-emerald-50 border-2 border-emerald-400 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs animate-in fade-in-50">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-700 text-white px-2.5 py-0.5 rounded-full shadow-2xs">
+                SO Final Review
+              </span>
+              <h3 className="font-bold text-sm text-emerald-950">Supervisory Report Awaiting Your Decision</h3>
+            </div>
+            <p className="text-xs text-emerald-800 leading-relaxed">
+              SHO {complaint.shoDecisionBy || "the Station House Officer"} recommended <strong>{complaint.shoFinalCategory || complaint.finalCategory || "a final category"}</strong> and forwarded the report
+              {complaint.soName ? ` to ${complaint.soName}` : ""}. Review the report and record the final status.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab("reports")}
+              className="text-xs font-bold gap-1.5 border-emerald-300 text-emerald-900 bg-white hover:bg-emerald-100 cursor-pointer"
+            >
+              <Eye className="w-4 h-4" />
+              View Report
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => setSoApproveModalOpen(true)}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Approve &amp; Select Final Status
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 3. SHO ACTION BANNER: FIR REGISTRATION APPROVED */}
-      {isSho && !isMhc && (
-        complaint.isFirApprovedBySho ||
+      {isSho && !isMhc && (isFinalApproved || finalFirRecommended) && !complaint.isFirRegistered && (
         complaint.workflowState === "FIR_REGISTRATION_PENDING" ||
-        complaint.finalCategory === "FIR Recommend" ||
+        finalFirRecommended ||
         complaint.status === "FIR Recommend"
       ) && !complaint.isFirRegistered && (
         <div className="bg-red-50 border-2 border-red-400 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs animate-in fade-in-50">
@@ -2527,11 +2658,11 @@ export default function ComplaintProfilePage() {
                 FIR Sanctioned
               </span>
               <h3 className="font-bold text-sm text-red-950">
-                SHO Sanction Granted: Regular FIR Registration Pending
+                Supervisory Approval Granted: Regular FIR Registration Pending
               </h3>
             </div>
             <p className="text-xs text-red-800 leading-relaxed">
-              Enquiry findings and FIR recommendation have been approved by SHO. Click below to formally register FIR. Status: <strong>FIR Recommend</strong>.
+              Enquiry findings and FIR recommendation have been approved by the Supervisory Officer (SO). Click below to formally register FIR. Status: <strong>FIR Recommend</strong>.
             </p>
           </div>
 
@@ -3696,7 +3827,12 @@ export default function ComplaintProfilePage() {
 
                               {/* Status */}
                               <td className="py-3 px-3.5 align-top">
-                                {report.sentToSho ? (
+                                {report.sentToSo ? (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono flex items-center gap-1 w-fit">
+                                    <Send className="w-3 h-3 text-emerald-600" />
+                                    <span>Sent to SO{report.soName ? ` · ${report.soName}` : ""}</span>
+                                  </span>
+                                ) : report.sentToSho ? (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 font-mono flex items-center gap-1 w-fit">
                                     <Send className="w-3 h-3 text-blue-600" />
                                     <span>Sent to SHO</span>
@@ -3731,9 +3867,18 @@ export default function ComplaintProfilePage() {
                               {/* Actions */}
                               <td className="py-3 px-3.5 align-top text-right">
                                 <div className="cms-report-row-actions flex flex-col items-end gap-1.5">
-{isShoAuthored && (
-                                    <Button type="button" variant="primary" size="sm" disabled title="Send to Superior workflow will be added later" className="text-[11px] h-8 px-2.5 gap-1 bg-red-600 text-white font-bold disabled:opacity-100 disabled:cursor-not-allowed">
-                                      <Send className="w-3 h-3" /><span>Send to Superior</span>
+{isShoAuthored && isSho && !isMhc && !report.sentToSo && complaint.workflowState === "SHO_APPROVED" && (
+                                    <Button
+                                      type="button"
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => handleOpenShoSendToSoModal(report)}
+                                      disabled={sendingReportToSo}
+                                      className="text-[11px] h-8 px-2.5 gap-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold cursor-pointer shadow-xs"
+                                      title="Forward this SHO report to the Supervisory Officer for final decision"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      <span>{sendingReportToSo && selectedReportForSo?.id === report.id ? "Sending..." : "Send To SO"}</span>
                                     </Button>
                                   )}
 {!isShoAuthored && isAssignedEo && !report.sentToSho && (
@@ -3903,8 +4048,13 @@ export default function ComplaintProfilePage() {
                                   </span>
                                 )}
 
-                                {/* Status Badge: "Saved in Complaint" vs "Draft" vs "Sent to SHO" */}
-                                {report.sentToSho ? (
+                                {/* Status Badge: "Saved in Complaint" vs "Draft" vs "Sent to SHO/SO" */}
+                                {report.sentToSo ? (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono flex items-center gap-1 w-fit">
+                                    <Send className="w-3 h-3 text-emerald-600" />
+                                    <span>Sent to SO{report.soName ? ` · ${report.soName}` : ""}</span>
+                                  </span>
+                                ) : report.sentToSho ? (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 font-mono flex items-center gap-1">
                                     <Send className="w-3 h-3 text-blue-600" />
                                     <span>Sent to SHO</span>
@@ -3960,9 +4110,18 @@ export default function ComplaintProfilePage() {
 
                           {/* Action buttons: View, Edit, Download, Print, Create New Version */}
                           <div className="pt-1 flex flex-wrap items-center justify-end gap-1.5">
-{isShoAuthored && (
-                                    <Button type="button" variant="primary" size="sm" disabled title="Send to Superior workflow will be added later" className="text-[11px] h-8 px-2.5 gap-1 bg-red-600 text-white font-bold disabled:opacity-100 disabled:cursor-not-allowed">
-                                      <Send className="w-3 h-3" /><span>Send to Superior</span>
+{isShoAuthored && isSho && !isMhc && !report.sentToSo && complaint.workflowState === "SHO_APPROVED" && (
+                                    <Button
+                                      type="button"
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => handleOpenShoSendToSoModal(report)}
+                                      disabled={sendingReportToSo}
+                                      className="text-[11px] h-8 px-2.5 gap-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold cursor-pointer shadow-xs"
+                                      title="Forward this SHO report to the Supervisory Officer for final decision"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      <span>{sendingReportToSo && selectedReportForSo?.id === report.id ? "Sending..." : "Send To SO"}</span>
                                     </Button>
                                   )}
 {!isShoAuthored && isAssignedEo && !report.sentToSho && (
@@ -3979,10 +4138,16 @@ export default function ComplaintProfilePage() {
                                 <span>{sendingReportToSho && selectedReportForSho?.id === report.id ? "Sending..." : "Send to SHO"}</span>
                               </Button>
                             )}
-{report.sentToSho && (
+{report.sentToSho && !report.sentToSo && (
                               <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1 font-mono">
                                 <Check className="w-3 h-3 text-blue-600" />
                                 <span>Sent to SHO</span>
+                              </span>
+                            )}
+{report.sentToSo && (
+                              <span className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 font-mono">
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>Sent to SO</span>
                               </span>
                             )}
 <ActionsDropdown>
@@ -6528,13 +6693,38 @@ export default function ComplaintProfilePage() {
         isLoading={sendingReportToSho}
       />
 
-      {/* SHO Approve Final Category Modal */}
+      {/* SHO recommendation modal */}
       <ShoApproveCategoryModal
         complaint={complaint}
         isOpen={shoApproveModalOpen}
         onClose={() => setShoApproveModalOpen(false)}
         onSubmit={handleShoApproveSubmit}
         isLoading={isShoApproving}
+      />
+
+      {/* SHO -> SO forwarding modal */}
+      <SendReportToSoModal
+        isOpen={sendToSoModalOpen}
+        recordNumber={complaint?.complaintNumber || "Complaint"}
+        reportTitle={selectedReportForSo?.title}
+        policeStation={complaint?.policeStation}
+        district={complaint?.district}
+        statusOptions={COMPLAINT_SO_STATUS_OPTIONS}
+        title="Send Complaint Report to Supervisory Officer (SO)"
+        subtext="Select the SHO recommendation and the supervisory officer for the final decision."
+        statusLabel="Select Status / Recommendation (mandatory)"
+        onClose={() => setSendToSoModalOpen(false)}
+        onSubmit={handleShoSendToSoSubmit}
+        isLoading={sendingReportToSo}
+      />
+
+      {/* SO final decision modal */}
+      <SoApproveCategoryModal
+        complaint={complaint}
+        isOpen={soApproveModalOpen}
+        onClose={() => setSoApproveModalOpen(false)}
+        onSubmit={handleSoApproveSubmit}
+        isLoading={isSoApproving}
       />
     </div>
   );

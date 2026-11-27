@@ -25,12 +25,12 @@ export function FinalReportShoReview({ report, userId, loaded, onUpdated }: { re
     catch (e) { setError(e instanceof Error ? e.message : 'Review could not be saved.'); }
     finally { setBusy(false); }
   };
-  if (!['SENT_TO_SHO', 'SHO_VIEWED'].includes(state || '')) return <p className="p-3 text-sm bg-blue-50">{state === 'REJECTED' ? `Returned to assigned IO: ${report.finalReportWorkflow?.rejectionReason}` : 'SHO approved — Under Checking'}</p>;
+  if (!['SENT_TO_SHO', 'SHO_VIEWED'].includes(state || '')) return <p className="p-3 text-sm bg-blue-50">{state === 'REJECTED' ? `Returned to assigned IO: ${report.finalReportWorkflow?.rejectionReason}` : 'SHO approved — forwarded to SO for final decision'}</p>;
   const ready = loaded && state === 'SHO_VIEWED' && report.finalReportWorkflow?.viewedBy === userId && !busy;
   return <div className="p-3 border-t bg-white space-y-2 shrink-0">
     {error && <p role="alert" className="text-sm text-red-700">{error} <button onClick={() => setRetry(n => n + 1)} className="underline">Retry view receipt</button></p>}
     <div className="flex flex-wrap gap-2 items-end"><label className="text-xs flex-1">Reason for returning to assigned IO<textarea aria-label="SHO rejection reason" className="block w-full border rounded p-2" rows={2} value={reason} onChange={e => setReason(e.target.value)} /></label>
-      <button disabled={!ready} onClick={() => decide('APPROVE_SHO')} className="bg-green-700 text-white rounded px-3 py-2 disabled:opacity-50">Approve — Under Checking</button>
+      <button disabled={!ready} onClick={() => decide('APPROVE_SHO')} className="bg-green-700 text-white rounded px-3 py-2 disabled:opacity-50">Approve — Send to SO</button>
       <button disabled={!ready} onClick={() => decide('REJECT_SHO')} className="bg-red-700 text-white rounded px-3 py-2 disabled:opacity-50">Reject — Return to IO</button>
     </div>
   </div>;

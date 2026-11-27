@@ -3,6 +3,8 @@
 import { isMhcOrMmRole } from "@/lib/officerRoles";
 import { useLanguage } from "@/context/LanguageContext";
 import { FinalReportShoReview } from "@/components/fir/FinalReportShoReview";
+import { FinalReportSoReview } from "@/components/fir/FinalReportSoReview";
+import { SendReportToSoModal, type SupervisoryStatusOption } from "@/components/complaints/SendReportToSoModal";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { writeCaseDraft } from "@/lib/caseWritingClient";
@@ -194,6 +196,13 @@ const FIR_REPORT_OPTIONS = [
   },
 ];
 
+// FIR profile keeps its own report statuses; no complaint-only options here.
+const FIR_SO_STATUS_OPTIONS: SupervisoryStatusOption[] = FIR_REPORT_OPTIONS.map((option) => ({
+  value: option.key,
+  label: option.label,
+  description: option.desc,
+}));
+
 import { BailDetailsModal } from '@/components/fir/BailDetailsModal';
 
 export default function FIRProfilePage() {
@@ -298,6 +307,9 @@ export default function FIRProfilePage() {
   const [generateReportDropdownOpen, setGenerateReportDropdownOpen] = useState(false);
   const generateReportDropdownRef = useRef<HTMLDivElement | null>(null);
   const [uploadReportModalOpen, setUploadReportModalOpen] = useState(false);
+  const [sendToSoModalOpen, setSendToSoModalOpen] = useState(false);
+  const [selectedReportForSo, setSelectedReportForSo] = useState<ComplaintReportItem | null>(null);
+  const [sendingReportToSo, setSendingReportToSo] = useState(false);
   const [reviewPreviewLoaded, setReviewPreviewLoaded] = useState(false);
   const [reportPreviewItem, setReportPreviewItem] = useState<ComplaintReportItem | null>(null);
   const [reportDraftModalOpen, setReportDraftModalOpen] = useState(false);
@@ -337,6 +349,7 @@ export default function FIRProfilePage() {
   useEscapeKey(Boolean(caseDiaryPreviewItem), () => { setCaseDiaryPreviewItem(null); setCaseDiaryPreviewUrl(""); });
   useEscapeKey(reportDraftModalOpen, () => setReportDraftModalOpen(false));
   useEscapeKey(uploadReportModalOpen, () => setUploadReportModalOpen(false));
+  useEscapeKey(sendToSoModalOpen && !sendingReportToSo, () => setSendToSoModalOpen(false));
   useEscapeKey(Boolean(reportPreviewItem), () => setReportPreviewItem(null));
   useEscapeKey(Boolean(docPreviewItem), () => setDocPreviewItem(null));
   useEscapeKey(isFinalFormModalOpen, () => setIsFinalFormModalOpen(false));
@@ -354,6 +367,7 @@ export default function FIRProfilePage() {
     currentUser.role === "SP_DISTRICT" ||
     currentUser.role === "SUPER_ADMIN";
   const isSho = (currentUser.role === "SHO" || currentUser.id === "usr_sho_1") && !isMhc;
+  const isShoOrAbove = (isSho || isSuperior) && !isMhc;
 
   const handleDetailReopenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1483,6 +1497,61 @@ export default function FIRProfilePage() {
       fetchFir();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Could not send report to SHO. Please retry.");
+    }
+  };
+
+  const handleOpenShoSendToSoModal = (report: ComplaintReportItem) => {
+    if (!isShoOrAbove) {
+      alert("Access Denied: Only SHO or a supervisory officer can forward this report to SO.");
+      return;
+    }
+    setSelectedReportForSo(report);
+    setSendToSoModalOpen(true);
+  };
+
+  const handleShoSendToSoSubmit = async (data: {
+    status: string;
+    remarks: string;
+    soName: string;
+    soRole: string;
+    soId: string;
+  }) => {
+    if (!fir) return;
+    setSendingReportToSo(true);
+    try {
+      const latest = firService.getFirById(fir.id);
+      const stored = latest?.reports?.find((r) => r.id === selectedReportForSo?.id);
+      if (!latest || !stored) throw new Error("Report not found. Reload the profile.");
+      if (stored.sentToSo) throw new Error("This report has already been sent to SO.");
+      const now = new Date().toISOString();
+      const reports = (latest.reports || []).map((r) => r.id === stored.id ? {
+        ...r,
+        sentToSo: true,
+        sentToSoAt: now,
+        sentToSoBy: currentUser.id,
+        soName: data.soName,
+        soRole: data.soRole,
+        soRecommendation: data.status,
+        soRemarks: data.remarks,
+        updatedAt: now,
+      } : r);
+      await firService.updateFir(fir.id, {
+        reports,
+        soName: data.soName,
+        soRole: data.soRole,
+        soDecision: undefined,
+        auditTrail: [{ id: `aud-so-${Date.now()}`, timestamp: now, action: "REPORT_FORWARDED_TO_SO",
+          officerName: currentUser.name, role: currentUser.role,
+          details: `SHO report "${stored.title}" forwarded to ${data.soName} with status ${data.status}`,
+        }, ...(latest.auditTrail || [])],
+      });
+      setSendToSoModalOpen(false);
+      alert(`Report forwarded to ${data.soName}. Awaiting SO final decision (${data.status}).`);
+      fetchFir();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not send report to SO. Please retry.");
+    } finally {
+      setSendingReportToSo(false);
     }
   };
 
@@ -2821,6 +2890,7 @@ export default function FIRProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {displayReports.map((report) => {
                 const isDraftStatus = report.status === "Draft";
+                const isShoAuthored = /\bSHO\b/i.test(report.createdByRole || "") || /\bSHO\b/i.test(report.officerRank || "");
                 return (
                   <Card key={report.id} className="border-slate-200 shadow-xs hover:shadow-md transition-shadow bg-white">
                     <CardContent className="p-4 space-y-3 text-xs">
@@ -2840,7 +2910,12 @@ export default function FIRProfilePage() {
                             )}
 
                             {/* Status Badge */}
-                            {report.sentToSho ? (
+                            {report.sentToSo ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono flex items-center gap-1">
+                                <Send className="w-3 h-3 text-emerald-600" />
+                                <span>Sent to SO{report.soName ? ` · ${report.soName}` : ""}</span>
+                              </span>
+                            ) : report.sentToSho ? (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300 font-mono flex items-center gap-1">
                                 <Send className="w-3 h-3 text-blue-600" />
                                 <span>Sent to SHO</span>
@@ -2878,7 +2953,7 @@ export default function FIRProfilePage() {
                         </span>
                       </div>
 
-                      {report.finalReportData && <div className="text-xs bg-blue-50 rounded p-2 space-y-1"><p><strong>{report.reportType === "CHARGESHEET" ? `Challan: ${report.finalReportData.chargeSheetType}` : `Final Report: ${report.reportType} — ${report.finalReportData.finalReportReason}`}</strong></p><p>Investigation: {report.finalReportData.investigationStatus}</p><p>Review: {report.finalReportWorkflow?.state === "SENT_TO_SHO" ? "Pending SHO View" : report.finalReportWorkflow?.state === "SHO_VIEWED" ? "Pending SHO Decision" : report.finalReportWorkflow?.state === "REJECTED" ? "Returned to IO" : report.finalReportWorkflow?.state?.replaceAll("_", " ")}</p>{report.finalReportWorkflow?.rejectionReason && <p className="text-red-700">Returned to {report.finalReportWorkflow.assignedIoName || "assigned IO"}: {report.finalReportWorkflow.rejectionReason}</p>}<p>Accused: {report.finalReportData.accused.map(a => `${a.name} (${a.action})`).join(", ") || "No accused recorded"}</p><p>✓ Final Submit saved · {report.sentToSho ? "✓ Sent to SHO" : "Pending: Send to SHO"} · {report.finalReportWorkflow?.chiNumber ? `✓ CHI ${report.finalReportWorkflow.chiNumber} — ${report.finalReportWorkflow.state}` : "Pending: CHI submission in FIR Part B"}</p></div>}
+                      {report.finalReportData && <div className="text-xs bg-blue-50 rounded p-2 space-y-1"><p><strong>{report.reportType === "CHARGESHEET" ? `Challan: ${report.finalReportData.chargeSheetType}` : `Final Report: ${report.reportType} — ${report.finalReportData.finalReportReason}`}</strong></p><p>Investigation: {report.finalReportData.investigationStatus}</p><p>Review: {report.finalReportWorkflow?.state === "SENT_TO_SHO" ? "Pending SHO View" : report.finalReportWorkflow?.state === "SHO_VIEWED" ? "Pending SHO Decision" : report.finalReportWorkflow?.state === "SENT_TO_SO" ? "Pending SO View" : report.finalReportWorkflow?.state === "SO_VIEWED" ? "Pending SO Decision" : report.finalReportWorkflow?.state === "REJECTED" ? "Returned to IO" : report.finalReportWorkflow?.state?.replaceAll("_", " ")}</p>{report.finalReportWorkflow?.rejectionReason && <p className="text-red-700">Returned to {report.finalReportWorkflow.assignedIoName || "assigned IO"}: {report.finalReportWorkflow.rejectionReason}</p>}{report.finalReportWorkflow?.soFinalStatus && <p className="text-emerald-700">SO final status: {report.finalReportWorkflow.soFinalStatus}</p>}<p>Accused: {report.finalReportData.accused.map(a => `${a.name} (${a.action})`).join(", ") || "No accused recorded"}</p><p>✓ Final Submit saved · {report.sentToSho ? "✓ Sent to SHO" : "Pending: Send to SHO"} · {report.finalReportWorkflow?.chiNumber ? `✓ CHI ${report.finalReportWorkflow.chiNumber} — ${report.finalReportWorkflow.state}` : "Pending: CHI submission in FIR Part B"}</p></div>}
                       {report.conclusionSummary && (
                         <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-sans line-clamp-2">
                           <span className="font-bold text-slate-900">Findings: </span>
@@ -2966,8 +3041,8 @@ export default function FIRProfilePage() {
                           </Button>
                         )}
 
-                        {/* 6. Send to Supervisory Officer / SP */}
-                        {!report.sentToSho && (
+                        {/* 6. Role-specific forwarding: IO -> SHO, SHO -> SO */}
+                        {!isShoAuthored && !report.sentToSho && !report.sentToSo && (
                           <Button
                             type="button"
                             variant="primary"
@@ -2980,10 +3055,30 @@ export default function FIRProfilePage() {
                             <span>Send to SHO</span>
                           </Button>
                         )}
-                        {report.sentToSho && (
+                        {isShoAuthored && isShoOrAbove && !report.sentToSo && (
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleOpenShoSendToSoModal(report)}
+                            disabled={sendingReportToSo}
+                            className="text-[11px] h-7 px-2.5 gap-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold cursor-pointer shadow-xs"
+                            title="Forward this SHO report to SO for final decision"
+                          >
+                            <Send className="w-3 h-3" />
+                            <span>{sendingReportToSo && selectedReportForSo?.id === report.id ? "Sending..." : "Send To SO"}</span>
+                          </Button>
+                        )}
+                        {report.sentToSho && !report.sentToSo && (
                           <span className="text-[10px] font-bold px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1 font-mono">
                             <Check className="w-3 h-3 text-blue-600" />
                             <span>Sent to SHO</span>
+                          </span>
+                        )}
+                        {report.sentToSo && (
+                          <span className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 font-mono">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            <span>Sent to SO</span>
                           </span>
                         )}
 
@@ -3804,6 +3899,7 @@ export default function FIRProfilePage() {
               </div>
 
               {reportPreviewItem.finalReportData && currentUser.role === "SHO" && currentUser.stationName === fir.policeStation && ['SENT_TO_SHO', 'SHO_VIEWED', 'REJECTED', 'UNDER_CHECKING'].includes(reportPreviewItem.finalReportWorkflow?.state || '') && <FinalReportShoReview key={`${reportPreviewItem.id}-${reportPreviewItem.versionNumber}`} report={reportPreviewItem} userId={currentUser.id} loaded={reviewPreviewLoaded} onUpdated={saved => { setReportPreviewItem(saved); setBackendReports(rows => rows.map(row => row.id === saved.id ? saved : row)); setReportRefresh(n => n + 1); }} />}
+              {reportPreviewItem.finalReportData && isSuperior && ['SENT_TO_SO', 'SO_VIEWED'].includes(reportPreviewItem.finalReportWorkflow?.state || '') && <FinalReportSoReview key={`${reportPreviewItem.id}-${reportPreviewItem.versionNumber}-so`} report={reportPreviewItem} userId={currentUser.id} loaded={reviewPreviewLoaded} onUpdated={saved => { setReportPreviewItem(saved); setBackendReports(rows => rows.map(row => row.id === saved.id ? saved : row)); setReportRefresh(n => n + 1); }} />}
               {previewHtml ? (
                 /* Authentic Statutory A4 Proforma (Identical to Step 2 Statutory Preview) */
                 <div className="flex-1 w-full bg-slate-100 overflow-hidden flex flex-col">
@@ -4288,6 +4384,22 @@ export default function FIRProfilePage() {
           }}
         />
       )}
+
+      {/* SHO -> SO forwarding modal (FIR-specific status options) */}
+      <SendReportToSoModal
+        isOpen={sendToSoModalOpen}
+        recordNumber={fir?.firNumber || "FIR"}
+        reportTitle={selectedReportForSo?.title}
+        policeStation={fir?.policeStation}
+        district={fir?.district}
+        statusOptions={FIR_SO_STATUS_OPTIONS}
+        title="Send FIR Report to Supervisory Officer (SO)"
+        subtext="Select the FIR report status and the supervisory officer for the final decision."
+        statusLabel="Select FIR report status (mandatory)"
+        onClose={() => setSendToSoModalOpen(false)}
+        onSubmit={handleShoSendToSoSubmit}
+        isLoading={sendingReportToSo}
+      />
     </div>
   );
 }

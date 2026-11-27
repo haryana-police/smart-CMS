@@ -2853,6 +2853,107 @@ export const ComplaintService = {
     return complaintsStore[index];
   },
 
+  async sendReportToSo(
+    complaintId: string,
+    officerName: string,
+    officerPno: string,
+    data: {
+      status: string;
+      remarks?: string;
+      soName: string;
+      soRole?: string;
+      soId?: string;
+      reportId?: string;
+    }
+  ): Promise<ComplaintItem> {
+    const index = complaintsStore.findIndex((c) => c.id === complaintId || c.complaintNumber === complaintId);
+    if (index === -1) throw new Error("Complaint not found");
+
+    const complaint = complaintsStore[index];
+    if (!data.soName?.trim()) throw new Error("Select the Supervisory Officer before sending.");
+    if (!data.status?.trim()) throw new Error("Select a status before sending to SO.");
+    if (complaint.isFirRegistered || complaint.firNumber) {
+      throw new Error("FIR is already registered. The report cannot be forwarded for final approval.");
+    }
+    if (complaint.shoDecision !== "APPROVE" && complaint.workflowState !== "SHO_APPROVED") {
+      throw new Error("The SHO must approve the report before it is sent to SO.");
+    }
+
+    const nowIso = new Date().toISOString();
+    let foundTarget = false;
+    const updatedReports = (complaint.reports || []).map((report) => {
+      const isTarget = data.reportId ? report.id === data.reportId : report.createdByRole === "SHO" || /\bSHO\b/i.test(report.officerRank || "");
+      if (!isTarget || foundTarget) return report;
+      foundTarget = true;
+      return {
+        ...report,
+        sentToSo: true,
+        sentToSoAt: nowIso,
+        sentToSoBy: officerName,
+        soName: data.soName.trim(),
+        soRole: data.soRole,
+        soRecommendation: data.status,
+        soRemarks: data.remarks,
+      };
+    });
+
+    if (!foundTarget) {
+      throw new Error("SHO supervisory report not found. Save or generate it before sending to SO.");
+    }
+
+    complaintsStore[index] = {
+      ...complaint,
+      reports: updatedReports,
+      workflowState: "SENT_TO_SO",
+      status: "REPORT_SUBMITTED",
+      isSentToSo: true,
+      sentToSoAt: nowIso,
+      sentToSoBy: officerName,
+      soName: data.soName.trim(),
+      soRole: data.soRole,
+      soId: data.soId,
+      soActionRequired: true,
+      soDecision: undefined,
+      soDecisionAt: undefined,
+      soDecisionBy: undefined,
+      updatedAt: nowIso,
+    };
+
+    this.addAuditRecord(complaint.id, {
+      action: "SENT_TO_SO",
+      actionLabel: `SHO Report Sent to SO (${data.status})`,
+      performedBy: officerName,
+      userPno: officerPno,
+      userRole: "SHO",
+      timestamp: nowIso,
+      outcome: data.status,
+      details: `SHO ${officerName} forwarded the supervisory report to ${data.soName} with status ${data.status}. ${data.remarks || ""}`,
+      metadata: { soName: data.soName, soRole: data.soRole, status: data.status },
+    });
+
+    this.addTimelineEvent(complaint.id, {
+      title: `Report Sent to Supervisory Officer (${data.status})`,
+      description: `SHO report forwarded to ${data.soName} for final decision. Recommended status: ${data.status}.`,
+      category: "STATUS_CHANGE",
+      officerName,
+      timestamp: nowIso,
+    });
+
+    saveComplaintsToStorage(complaintsStore);
+    syncComplaintsToServer(complaintsStore);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("complaints_updated", { detail: complaintsStore[index] }));
+    }
+
+    return complaintsStore[index];
+  },
+
+  /**
+   * SHO review no longer finalizes the complaint. It records the SHO's
+   * authoritative recommendation and generates the SHO supervisory report;
+   * the forwarded report is then sent to the SO for the final decision.
+   */
   async shoApprove(
     complaintId: string,
     shoName: string,
@@ -2864,70 +2965,37 @@ export const ComplaintService = {
     if (index === -1) throw new Error("Complaint not found");
 
     const complaint = complaintsStore[index];
-    const nowIso = new Date().toISOString();
-
-    // Determine final category selected by SHO
-    const chosenCategory = finalCategory || complaint.eoRecommendedCategory || (complaint.eoOutcome === "FIR Recommend" ? "FIR_RECOMMEND" : "NCR");
-    const isFir = chosenCategory === "FIR_RECOMMEND" || chosenCategory === "FIR Recommend";
-    const isClosure = chosenCategory === "CLOSURE" || chosenCategory === "Closure";
-    const isNcr = chosenCategory === "NCR";
-
-    const displayFinalCategory = isFir ? "FIR Recommend" : isClosure ? "Closure" : "NCR";
-    const displayFinalStatus = isFir ? "FIR Recommend" : "Complete";
-
-    let nextWorkflowState: WorkflowState = "COMPLETE";
-    let nextStatus: ComplaintStatus = "COMPLETE";
-    let isFirApprovedBySho = false;
-
-    if (isFir) {
-      nextWorkflowState = "FIR_REGISTRATION_PENDING";
-      nextStatus = "FIR_RECOMMEND";
-      isFirApprovedBySho = true;
-    } else {
-      nextWorkflowState = "COMPLETE";
-      nextStatus = "COMPLETE";
-      isFirApprovedBySho = false;
+    if (complaint.isFirRegistered || complaint.firNumber) {
+      throw new Error("FIR is already registered for this complaint. No further approval is allowed.");
+    }
+    if (complaint.shoDecision === "APPROVE" && complaint.workflowState === "SHO_APPROVED") {
+      return complaint;
     }
 
-    // Auto-generate SHO Supervisory Endorsement Report under SHO's name for selected category
+    const nowIso = new Date().toISOString();
+    const chosenCategory = finalCategory || complaint.eoRecommendedCategory || (complaint.eoOutcome === "FIR Recommend" ? "FIR_RECOMMEND" : "NCR");
+    const isFir = chosenCategory === "FIR_RECOMMEND" || chosenCategory === "FIR Recommend";
+    const isNcr = chosenCategory === "NCR";
+    const displayCategory = isFir ? "FIR Recommend" : isNcr ? "NCR" : "Closure";
+
     const shoReportId = `rep_sho_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const shoReportTitle = isFir
-      ? `SHO संज्ञान व एफआईआर संस्तुति आदेश (FIR Registration Approval) - ${complaint.complaintNumber}`
+      ? `SHO संज्ञान व एफआईआर संस्तुति आदेश (FIR Registration Recommendation) - ${complaint.complaintNumber}`
       : isNcr
-      ? `SHO असंज्ञेय अपराध स्वीकृति आदेश (NCR u/s 174 BNSS) - ${complaint.complaintNumber}`
-      : `SHO शिकायत निस्तारण व दाखिल दफ्तर आदेश (Closure Order) - ${complaint.complaintNumber}`;
-
-    const shoRecommendationType = isFir ? "FIR" : isNcr ? "NCR" : "RAZINAMA";
+      ? `SHO असंज्ञेय अपराध संस्तुति आदेश (NCR u/s 174 BNSS) - ${complaint.complaintNumber}`
+      : `SHO शिकायत निस्तारण संस्तुति आदेश (Closure Recommendation) - ${complaint.complaintNumber}`;
 
     const shoReportNarrative = `================================================================================
 कार्यालय थाना प्रभारी (OFFICE OF STATION HOUSE OFFICER)
 थाना: ${complaint.policeStation || "थाना क्षेत्र"}, जिला: ${complaint.district || "District"}
 शिकायत संदर्भ सं.: ${complaint.complaintNumber} | दिनांक: ${nowIso.split("T")[0]}
 ================================================================================
-विषय: जांच आख्या अवलोकन उपरांत SHO का अंतिम वैधानिक निर्णय व पर्यवेक्षीय आदेश (${displayFinalCategory})
+विषय: जांच आख्या अवलोकन उपरांत SHO का पर्यवेक्षीय संस्तुति आदेश (${displayCategory})
 
-1. शिकायत व पक्षकारों का विवरण:
-- शिकायत सं.: ${complaint.complaintNumber} (${complaint.categoryDisplay || "General"})
-- शिकायतकर्ता: ${complaint.complainantName || "नागरिक"} (मो.: ${complaint.complainantMobile || "N/A"})
-- पता: ${complaint.complainantAddress || "थाना क्षेत्र"}, ${complaint.complainantCity || ""}
-- विपक्षी: ${complaint.accusedList?.[0]?.name || "विपक्षी पक्ष"}
-
-2. जांच अधिकारी (EO) विवरण व संस्तुति:
-- जांच अधिकारी: ${complaint.assignedEoName || "Enquiry Officer"} (${complaint.assignedEoRank || "ASI/SI"})
-- EO संस्तुति श्रेणी: ${complaint.eoRecommendedCategory || displayFinalCategory}
-- EO जांच सारांश: ${complaint.eoRecommendedRemarks || "जांच अधिकारी द्वारा प्रस्तुत आख्या का अवलोकन किया गया।"}
-
-3. SHO अंतिम वैधानिक आदेश व पर्यवेक्षीय टिप्पणी:
-${remarks ? remarks.trim() : `जांच अधिकारी द्वारा प्रस्तुत संपूर्ण जांच आख्या, संकलित साक्ष्यों एवं बयानों का गहनता से पर्यवेक्षण किया गया। प्राप्त साक्ष्यों के आधार पर मामला ${displayFinalCategory} की श्रेणी में स्वीकृत किया जाता है। तदनुसार नियमानुसार अग्रिम वैधानिक कार्यवाही अमल में लाई जाए।`}
-
-4. वैधानिक कार्यवाही व आदेश:
-${
-  isFir
-    ? "प्रकरण में संज्ञेय अपराध घटित होना पाया जाता है। अतः अपराध की धाराओं के अंतर्गत अभियोग (FIR) तत्काल दर्ज कर अन्वेषण योग्य अधिकारी को सौंपा जाए।"
-    : isNcr
-    ? "प्रकरण असंज्ञेय अपराध (Non-Cognizable Offence) से संबंधित है। अतः BNSS धारा 174 के अंतर्गत NCR दर्ज कर शिकायतकर्ता को सक्षम न्यायालय की हिदायत दी जाए।"
-    : "प्रकरण में दोनों पक्षों के मध्य विवाद निस्तारित/राजीनामा/दीवानी स्वरूप का होने के कारण शिकायत दाखिल दफ्तर (Close) की जाती है।"
-}
+1. जांच अधिकारी (EO) संस्तुति: ${complaint.eoRecommendedCategory || displayCategory}
+2. SHO पर्यवेक्षीय टिप्पणी: ${remarks || "जांच आख्या, साक्ष्य एवं बयानों का अवलोकन किया गया।"}
+3. SHO संस्तुति: ${displayCategory}
+4. महत्वपूर्ण बिंदु: यह संस्तुति अंतिम निर्णय हेतु पर्यवेक्षीय अधिकारी (SO/DSP) को भेजी जाएगी।
 
 हस्ताक्षर / आदेशकर्ता:
 (${shoName})
@@ -2942,13 +3010,13 @@ PNO: ${shoPno}
       versionNumber: (complaint.reports?.length || 0) + 1,
       title: shoReportTitle,
       reportType: "SHO_SUPERVISORY_ENDORSEMENT",
-      reportTypeLabel: `SHO आदेश (${displayFinalCategory})`,
-      dispatchNo: `SHO/ORD/${complaint.complaintNumber}`,
+      reportTypeLabel: `SHO संस्तुति (${displayCategory})`,
+      dispatchNo: `SHO/REC/${complaint.complaintNumber}`,
       generatedDate: nowIso.split("T")[0],
       officerName: shoName,
       officerRank: "Station House Officer (SHO)",
       officerPno: shoPno,
-      conclusionSummary: remarks || `SHO approved final category: ${displayFinalCategory}`,
+      conclusionSummary: remarks || `SHO recommended final category: ${displayCategory}`,
       content: shoReportNarrative,
       fileFormat: "TXT",
       createdAt: nowIso,
@@ -2960,46 +3028,152 @@ PNO: ${shoPno}
       currentOwnerUserId: shoPno,
       source: "GENERATED",
       status: "Saved in Complaint",
-      recommendationType: shoRecommendationType as any,
+      recommendationType: isFir ? "FIR" : isNcr ? "NCR" : "RAZINAMA",
       isFirRecommended: isFir,
       selectedOutcome: isFir ? "FIR Recommend" : "Complete",
     };
 
-    const existingReports = complaint.reports || [];
-    const updatedReports = [shoReportItem, ...existingReports];
+    const updatedReports = [shoReportItem, ...(complaint.reports || [])];
 
     complaintsStore[index] = {
       ...complaint,
       reports: updatedReports,
-      status: nextStatus,
-      workflowState: nextWorkflowState,
+      status: "REPORT_SUBMITTED",
+      workflowState: "SHO_APPROVED",
       shoFinalCategory: chosenCategory,
-      finalCategory: displayFinalCategory,
-      finalStatus: displayFinalStatus,
+      finalCategory: undefined,
+      finalStatus: undefined,
       shoDecision: "APPROVE",
       shoDecisionAt: nowIso,
       shoDecisionBy: shoName,
       shoApprovedBy: shoName,
       shoApprovedAt: nowIso,
       shoRemarks: remarks,
+      shoActionRequired: false,
+      soActionRequired: true,
+      isFirApprovedBySho: false,
+      firApprovedAt: undefined,
+      firApprovedBy: undefined,
+      soDecision: undefined,
+      soApprovedAt: undefined,
+      soApprovedBy: undefined,
+      eoRecommendedReportId: complaint.eoRecommendedReportId || (complaint.reports?.[0]?.id),
+      updatedAt: nowIso,
+    };
+
+    this.addAuditRecord(complaint.id, {
+      action: "SHO_RECOMMENDED_TO_SO",
+      actionLabel: `SHO Recommendation: ${displayCategory} — forwarded to SO`,
+      performedBy: shoName,
+      userPno: shoPno,
+      userRole: "SHO",
+      timestamp: nowIso,
+      outcome: displayCategory,
+      details: remarks || `SHO approved the enquiry report with recommendation ${displayCategory}; awaiting SO final decision.`,
+    });
+
+    this.addTimelineEvent(complaint.id, {
+      title: `SHO Recommendation Recorded: ${displayCategory}`,
+      description: `Station House Officer ${shoName} recorded recommendation ${displayCategory}. The SHO supervisory report is ready to be sent to the Supervisory Officer.`,
+      category: "STATUS_CHANGE",
+      officerName: shoName,
+      timestamp: nowIso,
+    });
+
+    saveComplaintsToStorage(complaintsStore);
+    syncComplaintsToServer(complaintsStore);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("complaints_updated", { detail: complaintsStore[index] }));
+    }
+
+    return complaintsStore[index];
+  },
+
+  async soApprove(
+    complaintId: string,
+    shoName: string,
+    shoPno: string = "HR-04291882",
+    remarks?: string,
+    finalCategory?: 'NCR' | 'FIR_RECOMMEND' | 'CLOSURE' | string
+  ): Promise<ComplaintItem> {
+    const index = complaintsStore.findIndex((c) => c.id === complaintId || c.complaintNumber === complaintId);
+    if (index === -1) throw new Error("Complaint not found");
+
+    const complaint = complaintsStore[index];
+    if (complaint.workflowState !== "SENT_TO_SO") {
+      throw new Error("This complaint must be sent to the Supervisory Officer before final approval.");
+    }
+    if (complaint.isFirRegistered || complaint.firNumber) {
+      throw new Error("FIR is already registered for this complaint. No further final approval is allowed.");
+    }
+    const nowIso = new Date().toISOString();
+
+    // Final authoritative category selected by the Supervisory Officer (SO/DSP).
+    const rawCategory = String(finalCategory || complaint.shoFinalCategory || complaint.eoRecommendedCategory || (complaint.eoOutcome === "FIR Recommend" ? "FIR_RECOMMEND" : "NCR")).trim().toUpperCase().replaceAll(" ", "_");
+    const chosenCategory = finalCategory || complaint.shoFinalCategory || complaint.eoRecommendedCategory || rawCategory;
+    const isFir = rawCategory.includes("FIR");
+    const isNcr = rawCategory === "NCR";
+    const isClosure = !isFir && !isNcr;
+    const otherFinalStatuses = new Set<ComplaintStatus>([
+      "COMPLETE", "DISPOSED_MUTUAL_ACCORD", "DISPOSED_CIVIL_NATURE", "DISPOSED_UNSUBSTANTIATED", "TRANSFERRED_OTHER_PS", "CORRECTION_REQUIRED",
+    ]);
+    const otherStatus = otherFinalStatuses.has(rawCategory as ComplaintStatus) ? rawCategory as ComplaintStatus : undefined;
+
+    const displayFinalCategory = isFir ? "FIR Recommend" : isNcr ? "NCR" : otherStatus ? otherStatus.replaceAll("_", " ") : "Closure";
+    const displayFinalStatus = isFir ? "FIR Recommend" : otherStatus || "COMPLETE";
+
+    let nextWorkflowState: WorkflowState = "COMPLETE";
+    let nextStatus: ComplaintStatus = "COMPLETE";
+    let isFirApprovedBySho = false;
+
+    if (isFir) {
+      nextWorkflowState = "FIR_REGISTRATION_PENDING";
+      nextStatus = "FIR_RECOMMEND";
+      isFirApprovedBySho = true;
+    } else {
+      nextWorkflowState = "COMPLETE";
+      nextStatus = otherStatus || "COMPLETE";
+      isFirApprovedBySho = false;
+    }
+
+    // The SHO supervisory report was generated at the SHO approval stage and is left untouched.
+    complaintsStore[index] = {
+      ...complaint,
+      reports: complaint.reports,
+      status: nextStatus,
+      workflowState: nextWorkflowState,
+      shoFinalCategory: complaint.shoFinalCategory || chosenCategory,
+      finalCategory: displayFinalCategory,
+      finalStatus: displayFinalStatus,
+      soDecision: "APPROVE",
+      soDecisionAt: nowIso,
+      soDecisionBy: shoName,
+      soFinalCategory: displayFinalCategory,
+      soRemarks: remarks,
+      soApprovedAt: nowIso,
+      soApprovedBy: shoName,
+      isFirApprovedBySo: isFir,
+      // Compatibility flags reused by the unchanged Register FIR flow.
       isFirApprovedBySho,
       firApprovedAt: isFirApprovedBySho ? nowIso : undefined,
       firApprovedBy: isFirApprovedBySho ? shoName : undefined,
-      shoActionRequired: isFir,
-      eoRecommendedReportId: complaint.eoRecommendedReportId || (existingReports[0]?.id),
+      soActionRequired: false,
+      shoActionRequired: false,
+      eoRecommendedReportId: complaint.eoRecommendedReportId || complaint.reports?.[0]?.id,
       updatedAt: nowIso,
     };
 
     // Audit record
     this.addAuditRecord(complaint.id, {
-      action: "SHO_APPROVED",
-      actionLabel: `SHO Final Decision: ${displayFinalCategory} (Status: ${displayFinalStatus})`,
+      action: "SO_APPROVED",
+      actionLabel: `SO Final Decision: ${displayFinalCategory} (Status: ${displayFinalStatus})`,
       performedBy: shoName,
       userPno: shoPno,
       userRole: "SHO",
       timestamp: nowIso,
       outcome: displayFinalCategory,
-      details: remarks || `SHO approved case with authoritative final category: ${displayFinalCategory}. (EO recommendation was: ${complaint.eoRecommendedCategory || "Not specified"}).`,
+      details: remarks || `SO approved case with authoritative final category: ${displayFinalCategory}. (SHO recommendation was: ${complaint.shoFinalCategory || complaint.eoRecommendedCategory || "Not specified"}).`,
       metadata: {
         shoFinalCategory: chosenCategory,
         finalCategory: displayFinalCategory,
@@ -3010,8 +3184,8 @@ PNO: ${shoPno}
 
     // Timeline
     this.addTimelineEvent(complaint.id, {
-      title: `SHO Approved Final Category: ${displayFinalCategory}`,
-      description: `Station House Officer ${shoName} decided final category: ${displayFinalCategory}. Status set to: ${displayFinalStatus}. ${remarks ? `Remarks: ${remarks}` : ""}`,
+      title: `SO Approved Final Category: ${displayFinalCategory}`,
+      description: `Supervisory Officer ${shoName} decided final category: ${displayFinalCategory}. Status set to: ${displayFinalStatus}. ${remarks ? `Remarks: ${remarks}` : ""}`,
       category: "STATUS_CHANGE",
       officerName: shoName,
       timestamp: nowIso,
@@ -3026,7 +3200,7 @@ PNO: ${shoPno}
         complaintId: complaint.id,
         complaintNumber: complaint.complaintNumber,
         title: `Report Decision: ${complaint.complaintNumber}`,
-        message: `SHO ${shoName} has approved case with final category "${displayFinalCategory}". ${remarks ? `Remarks: "${remarks}"` : ""}`,
+        message: `Supervisory Officer ${shoName} has finalized the case with category "${displayFinalCategory}". ${remarks ? `Remarks: "${remarks}"` : ""}`,
         createdAt: nowIso,
         priority: "ROUTINE",
       };
@@ -3591,6 +3765,17 @@ ${reportBody}
     if (index === -1) throw new Error("Complaint not found");
 
     const complaint = complaintsStore[index];
+
+    // One-time registration guard. A retry of the same FIR (used by the
+    // complaint/FIR sync path) remains idempotent; a second/different FIR is rejected.
+    const { persistentFirService: existingFirService } = await import("./persistentFirService");
+    const existingFir = existingFirService.getFirBySourceComplaintId(complaint.id);
+    const alreadyRegistered = Boolean(complaint.isFirRegistered || complaint.firNumber || existingFir);
+    const sameFirRetry = Boolean(existingFir && (!complaint.firNumber || complaint.firNumber === firNumber));
+    if (alreadyRegistered && !sameFirRetry) {
+      throw new Error("FIR is already registered for this complaint. Another FIR cannot be registered.");
+    }
+
     const nowIso = new Date().toISOString();
     const dateStr = firDate || nowIso.split("T")[0];
 
@@ -3914,7 +4099,7 @@ ${reportBody}
 
 // Serialize browser mutations, commit only changed records, and expose persistence failures.
 let mutationQueue:Promise<unknown>=Promise.resolve();
-const mutations=['createComplaint','assignEnquiryOfficer','addEnquiryNote','addEvidence','addDocument','transferComplaint','transferComplaintFull','linkComplaint','linkComplaintsFull','delinkComplaintsFull','issueNcrReference','linkFir','requestProgressReport','submitTransferJustification','deleteEnquiryNote','deleteEvidence','deleteDocument','addConfidentialDossier','deleteConfidentialDossier','addComplaintReport','submitEoReportWithOutcome','sendReportToSho','shoApprove','shoReEnquiry','shoReject','registerFir','createFirCriminalCaseGdEntry','deleteComplaintReport','saveLegalAnalysis','saveInvestigationSummary'] as const;
+const mutations=['createComplaint','assignEnquiryOfficer','addEnquiryNote','addEvidence','addDocument','transferComplaint','transferComplaintFull','linkComplaint','linkComplaintsFull','delinkComplaintsFull','issueNcrReference','linkFir','requestProgressReport','submitTransferJustification','deleteEnquiryNote','deleteEvidence','deleteDocument','addConfidentialDossier','deleteConfidentialDossier','addComplaintReport','submitEoReportWithOutcome','sendReportToSho','sendReportToSo','shoApprove','soApprove','shoReEnquiry','shoReject','registerFir','createFirCriminalCaseGdEntry','deleteComplaintReport','saveLegalAnalysis','saveInvestigationSummary'] as const;
 for(const key of mutations){
  const original=ComplaintService[key];
  if(typeof original!=='function')continue;

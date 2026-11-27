@@ -571,13 +571,7 @@ function ComplaintListContent() {
       setShoApproveModalComplaint(null);
       setShoApproveRemarks("");
       fetchComplaints();
-      if (payload?.finalCategory === "CLOSURE") {
-        alert("Enquiry report approved with final category: Closure. Complaint marked Complete and Roznamcha GD entry sent to Auto Suggestions & Drafts for Munshi (MHC).");
-      } else if (payload?.finalCategory === "NCR") {
-        alert("Enquiry report approved with final category: NCR. Roznamcha GD suggestion sent to Auto Suggestions & Drafts for Munshi (MHC).");
-      } else if (payload?.finalCategory === "FIR_RECOMMEND") {
-        alert("Enquiry report approved with final category: Recommended for FIR. Roznamcha GD suggestion sent to Auto Suggestions & Drafts for Munshi (MHC).");
-      }
+      alert(`SHO recommendation recorded: ${payload?.finalCategory || "selected category"}. Open the complaint and click “Send To SO” on the generated SHO report to forward it for the final decision.`);
     } catch (e) {
       console.error(e);
       alert("Error approving report");

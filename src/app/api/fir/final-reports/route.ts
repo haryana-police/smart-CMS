@@ -66,7 +66,7 @@ export async function PATCH(req: NextRequest) {
   const apiUser = await apiAccess(req); if (apiUser instanceof Response) return apiUser;
 
   try {
-    const body = z.object({ action: z.enum(['SEND_TO_SHO', 'SUBMIT_CHI', 'VIEW_SHO', 'APPROVE_SHO', 'REJECT_SHO']).default('SEND_TO_SHO'), reason: z.string().trim().max(10000).optional(), chiNumber: z.string().trim().min(1).max(100).optional(), id: z.string().min(1), firId: z.string().min(1), expectedVersion: z.number().int().positive(), authorId: z.string().min(1) }).parse(await req.json());
+    const body = z.object({ action: z.enum(['SEND_TO_SHO', 'SUBMIT_CHI', 'VIEW_SHO', 'APPROVE_SHO', 'REJECT_SHO', 'VIEW_SO', 'APPROVE_SO', 'REJECT_SO']).default('SEND_TO_SHO'), reason: z.string().trim().max(10000).optional(), soFinalStatus: z.string().trim().max(100).optional(), chiNumber: z.string().trim().min(1).max(100).optional(), id: z.string().min(1), firId: z.string().min(1), expectedVersion: z.number().int().positive(), authorId: z.string().min(1) }).parse(await req.json());
     body.authorId=apiUser.id;
     const stored=await prisma.firFinalReport.findUnique({where:{id:body.id}});
     const canonical=(await readFirRecords()).find(f=>f.id===body.firId);
@@ -74,6 +74,7 @@ export async function PATCH(req: NextRequest) {
     if (['SEND_TO_SHO','SUBMIT_CHI'].includes(body.action) && stored.createdBy !== apiUser.id && apiUser.role !== 'SHO') return forbidden();
     const synced = async (report: Awaited<ReturnType<typeof finalReportDbService.review>>) => { await synchronizeFinalReportFir(report,apiUser); return NextResponse.json({report}); };
     if (body.action === 'VIEW_SHO'  || body.action === 'APPROVE_SHO' || body.action === 'REJECT_SHO') return synced(await finalReportDbService.review(body.id, body.firId, body.expectedVersion, apiUser, body.action, body.reason));
+    if (body.action === 'VIEW_SO' || body.action === 'APPROVE_SO' || body.action === 'REJECT_SO') return synced(await finalReportDbService.reviewSo(body.id, body.firId, body.expectedVersion, apiUser, body.action, body.reason, body.soFinalStatus));
     if (body.action === 'SUBMIT_CHI') {
       if (!body.chiNumber) return NextResponse.json({ error: 'CHI number is required.' }, { status: 400 });
       return synced(await finalReportDbService.submitChi(body.id, body.firId, body.expectedVersion, body.authorId, body.chiNumber));
