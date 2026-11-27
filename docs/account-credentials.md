@@ -17,8 +17,9 @@
 ## Login and session flow
 
 1. `validLogin()` looks up `User` by `pno` first and verifies `passwordHash` with scrypt.
-2. `baseSessionUser()` and `viewableOfficer()` also resolve from `User` first; JSON profiles
-   and demo personas are only a fallback for a principal that is not in the table.
+2. `baseSessionUser()` and `viewableOfficer()` also resolve from `User` first; the seeded JSON
+   profile store is only a fallback for a principal that is not in the table. The hardcoded
+   demo personas have been removed from the codebase entirely.
 3. `accountMasterService` merges the JSON profile onto the `User` row for admin screens and
    the officer switcher. Every create, update, status change, password reset and delete writes
    to the `User` table as well as the profile store.

@@ -17,7 +17,6 @@ type OfficerCard = {
 export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated, sessionUser, enterViewAs } = useAuth();
-  const [demo, setDemo] = useState(false);
   const [pickerEnabled, setPickerEnabled] = useState(false);
   const [localAutoAdmin, setLocalAutoAdmin] = useState(false);
   const [officers, setOfficers] = useState<OfficerCard[]>([]);
@@ -30,7 +29,6 @@ export default function LoginPage() {
   const showOfficerPicker = pickerEnabled || (localAutoAdmin && isDeveloper);
   React.useEffect(() => {
     fetch("/api/auth/session", { cache: "no-store" }).then(response => response.json()).then(data => {
-      setDemo(data.demoEnabled === true);
       setPickerEnabled(data.officerPickerEnabled === true);
       setLocalAutoAdmin(data.localAutoAdmin === true);
     }).catch(() => {});
@@ -75,9 +73,7 @@ export default function LoginPage() {
     if(ok){
       setPin("");
       if (!showOfficerPicker || username.trim().toUpperCase() !== "DEV-ADMIN") router.push('/');
-    }else setError((window as any).__lastLoginError || (password === '123456' && !demo
-      ? 'Demo login is disabled on this server. Sign in with your assigned PNO and password.'
-      : 'Invalid PNO or PIN. Please verify your credentials.'));
+    }else setError((window as any).__lastLoginError || 'Invalid PNO or PIN. Please verify your credentials.');
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -115,20 +111,6 @@ export default function LoginPage() {
     await quickLogin(officer.id, "Officer account could not be opened.");
   };
 
-  const handleDeveloperLogin = async () => {
-    setError(null);
-    if (!demo) { setPno('DEV-ADMIN'); setPin(''); return; }
-    if (isLoading) return;
-    setPno('DEV-ADMIN'); setPin('123456'); setIsLoading(true);
-    try {
-      const ok = await login('DEV-ADMIN', '123456');
-      if (ok) router.push('/');
-      else setError((window as any).__lastLoginError || 'Developer admin login failed. Please retry.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 sm:p-6 text-slate-100">
       <div className="w-full max-w-5xl">
@@ -154,7 +136,7 @@ export default function LoginPage() {
                   <h2 className="text-base font-bold text-slate-900">Police Personnel Login</h2>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  {demo ? "Local demo PIN: 123456." : "Sign in with your assigned PNO and PIN."}
+                  Sign in with your assigned PNO and PIN.
                 </p>
               </div>
 

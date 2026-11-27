@@ -1,15 +1,14 @@
 import { createHmac, randomBytes, timingSafeEqual, scryptSync } from 'node:crypto';
 import { INVESTIGATING_OFFICER_LABEL, normalizeOfficerRole } from '@/lib/officerRoles';
-import { DEMO_USERS } from '@/lib/mockData';
 import type { UserSession } from '@/types';
 import type { MasterAccount } from '@/types/adminMaster';
 
 const globals = globalThis as typeof globalThis & { cmsSessionSecret?: string };
 // Demo login is ON by default so a freshly deployed test VM works with no runtime setup.
-// An operational deployment must set DISABLE_DEMO_LOGIN=true; then demo cards, the demo PIN
-// and the one-click developer admin are all disabled and real credentials are required.
+// It now covers only the one-click officer roster (database/seeded accounts) and the
+// one-click developer admin. An operational deployment must set DISABLE_DEMO_LOGIN=true;
+// then the one-click cards are disabled and real credentials are required.
 export const demoEnabled = () => process.env.DISABLE_DEMO_LOGIN !== 'true';
-export const demoPersonasEnabled = () => demoEnabled() && process.env.CMS_DISABLE_DEMO_PERSONAS !== 'true';
 
 function secret() {
   const configured = process.env.CMS_SESSION_SECRET;
@@ -18,8 +17,13 @@ function secret() {
   return globals.cmsSessionSecret ??= randomBytes(32).toString('hex');
 }
 
+const DEVELOPER_ADMIN_IDENTITY: Pick<UserSession, 'rank' | 'avatarUrl'> = {
+  rank: 'SUPERINTENDENT_OF_POLICE',
+  avatarUrl: '/avatars/sho.png',
+};
+
 export function developerAdminUser(): UserSession {
-  return { ...DEMO_USERS[0], id: 'cms_developer_admin', pno: 'DEV-ADMIN', name: 'Developer Admin',
+  return { ...DEVELOPER_ADMIN_IDENTITY, id: 'cms_developer_admin', pno: 'DEV-ADMIN', name: 'Developer Admin',
     role: 'SUPER_ADMIN', roleDisplay: 'Developer Administrator', rankDisplay: 'Developer Administrator',
     stationName: 'CMS Administration', stationCode: 'CMS-ADMIN', district: 'All Districts' };
 }
@@ -123,8 +127,6 @@ export async function viewableOfficer(id: string): Promise<UserSession | null> {
       const acc = await getAccountById(id);
       if (acc && acc.status === 'ACTIVE') return masterAccountToSession(acc);
     } catch {}
-    const persona = demoPersonasEnabled() && DEMO_USERS.find(candidate => candidate.id === id);
-    if (persona) return persona;
   }
   return null;
 }
@@ -143,7 +145,6 @@ async function baseSessionUser(userId: string, demo: boolean): Promise<UserSessi
       const acc = await getAccountById(userId);
       if (acc && acc.status === 'ACTIVE') return masterAccountToSession(acc);
     } catch {}
-    return demoPersonasEnabled() ? DEMO_USERS.find(persona => persona.id === userId) ?? null : null;
   }
   return null;
 }
@@ -173,18 +174,13 @@ export async function sessionUser(req: Request): Promise<UserSession | null> {
 
 export async function validLogin(pno: string, pin: string): Promise<UserSession | null> {
   if (pno.trim().toUpperCase() === 'DEV-ADMIN') {
-    // Demo mode: one-click developer access. Operational deployments still require the configured password.
-    if (demoPersonasEnabled() && pin === '123456') return developerAdminUser();
+    // The developer administrator signs in with the configured password; the one-click
+    // login button uses the quickLoginId path instead of the demo PIN.
     const password = process.env.CMS_DEVELOPER_ADMIN_PASSWORD;
     if (!password) return null;
     const supplied = createHmac('sha256', secret()).update(pin).digest();
     const expected = createHmac('sha256', secret()).update(password).digest();
     return timingSafeEqual(supplied, expected) ? developerAdminUser() : null;
-  }
-  // Test personas must work even when the VM database has not been seeded.
-  if (demoPersonasEnabled() && pin === '123456') {
-    const demo = DEMO_USERS.find(candidate => candidate.pno.toUpperCase() === pno.trim().toUpperCase());
-    if (demo) return demo;
   }
   // User table is checked first so credentials come from the database, not the legacy JSON store.
   const { prisma } = await import('@/lib/prisma');
@@ -212,8 +208,7 @@ export async function validLogin(pno: string, pin: string): Promise<UserSession 
       }
     } catch {}
   }
-  if (!demoPersonasEnabled() || pin !== '123456') return null;
-  return DEMO_USERS.find(candidate => candidate.pno.toUpperCase() === pno.trim().toUpperCase()) ?? null;
+  return null;
 }
 
 export function sameOrigin(req:Request){

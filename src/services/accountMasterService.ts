@@ -1,4 +1,4 @@
-﻿import { readRuntimeJson, usesPostgresStore, writeRuntimeJson } from "@/lib/runtimeJsonStore";
+import { readRuntimeJson, usesPostgresStore, writeRuntimeJson } from "@/lib/runtimeJsonStore";
 import { prisma } from "@/lib/prisma";
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -11,7 +11,6 @@ import type {
   AccountAuditLog,
 } from '../types/adminMaster';
 import { INVESTIGATING_OFFICER_LABEL, normalizeOfficerRole } from "@/lib/officerRoles";
-import { DEMO_USERS } from '@/lib/mockData';
 import { readMasterLocationReferences } from './masterLocationReferences';
 
 const STORE_PATH = path.join(process.cwd(), 'prisma', 'accounts-master-store.json');
@@ -146,62 +145,10 @@ export function hashPin(pin: string): string {
   return `${salt}:${hash}`;
 }
 
-// Map Demo users to initial Master Accounts
+// File-mode fallback starts with an empty account list; real accounts come from the
+// PostgreSQL seed (scripts/seed-accounts.mjs) or Account Master administration.
 function getInitialAccounts(): MasterAccount[] {
-  const now = new Date().toISOString();
-  const defaultHash = hashPin('123456');
-
-  return DEMO_USERS.map((u) => {
-    let assignedUnitType: MasterAccount['assignedUnitType'] = 'POLICE_STATION';
-    let jurisdictionType: JurisdictionType = 'SINGLE_STATION';
-    let roleVal: AccountRole = 'SHO';
-
-    if (u.role === 'SP_DISTRICT') {
-      assignedUnitType = 'DISTRICT_OFFICE';
-      jurisdictionType = 'DISTRICT_WIDE';
-      roleVal = 'SP_DISTRICT';
-    } else if (u.role === 'DSP_SUBDIV') {
-      assignedUnitType = 'DISTRICT_OFFICE';
-      jurisdictionType = 'SUBDIVISION_MULTI_STATION';
-      roleVal = 'DSP_SUBDIV';
-    } else if (u.role === 'MHC_GD_INCHARGE' || u.role === 'MM') {
-      assignedUnitType = 'MHC_STORE';
-      jurisdictionType = 'SINGLE_STATION';
-      roleVal = u.role;
-    } else if (u.role === 'ENQUIRY_OFFICER') {
-      assignedUnitType = 'POLICE_STATION';
-      jurisdictionType = 'SINGLE_STATION';
-      roleVal = 'ENQUIRY_OFFICER';
-    }
-
-    return {
-      id: u.id,
-      username: u.pno,
-      pno: u.pno,
-      beltNumber: u.beltNumber || u.pno,
-      fullName: u.name,
-      mobileNumber: `98120${u.id.replace(/\D/g, '').padEnd(5, '0').slice(0, 5)}`,
-      email: `${u.pno.toLowerCase().replace(/[^a-z0-9]/g, '')}@hry.police.gov.in`,
-      designation: u.rankDisplay || u.rank,
-      rank: u.rank,
-      rankDisplay: u.rankDisplay,
-      role: roleVal,
-      roleDisplay: u.roleDisplay,
-      assignedUnitType,
-      assignedUnitId: u.stationCode,
-      assignedUnitName: u.stationName,
-      state: 'Haryana',
-      range: u.district === 'Karnal' || u.district === 'Panipat' ? 'Karnal Range' : 'Ambala Range',
-      district: u.district,
-      policeStation: u.stationName,
-      authorizedPoliceStations: [u.stationName],
-      jurisdictionType,
-      status: 'ACTIVE',
-      passwordHash: defaultHash,
-      createdAt: now,
-      updatedAt: now,
-    };
-  });
+  return [];
 }
 
 // Atomic file locking helper

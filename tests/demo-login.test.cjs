@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript'),crypto=require('node:crypto');
-const modules=new Map();let dbQueries=0,dbUser=null,dbUnavailable=false;
+const modules=new Map();let dbQueries=0,dbUser=null,dbUnavailable=false,storeAccount=null;
 const process_={...process,env:{...process.env,NODE_ENV:'test',CMS_SESSION_SECRET:'test-secret-'.repeat(4)}};
 for(const key of ['ENABLE_DEMO_LOGIN','NEXT_PUBLIC_ENABLE_DEMO_LOGIN','CMS_DEVELOPER_ADMIN_PASSWORD','DISABLE_DEMO_LOGIN'])delete process_.env[key];
 function load(file){
@@ -17,37 +17,39 @@ function load(file){
       }},
       policeUnit:{findMany:async()=>[]},
     }};
-    if(n==='@/services/accountMasterService')return {getAccountById:async()=>null,getAccountByUsername:async()=>null};
-    if(n==='@/lib/mockData')return load('src/lib/mockData.ts');
-    if(n==='./mockData')return load('src/lib/mockData.ts');
+    if(n==='@/services/accountMasterService')return {getAccountById:async(id)=>storeAccount && storeAccount.id===id ? storeAccount : null,getAccountByUsername:async(pno)=>storeAccount && storeAccount.pno===pno ? storeAccount : null};
     if(n.startsWith('@/')){const f='src/'+n.slice(2);return load(fs.existsSync(f+'.ts')?f+'.ts':f+'/index.ts');}
     if(n.startsWith('.'))return load(path.join(path.dirname(file),n+'.ts'));
     return require(n);
   }});
   return exports;
 }
-const {DEMO_USERS}=load('src/lib/mockData.ts');
-const {validLogin,sessionUser,sessionPrincipal,issueSession,demoEnabled}=load('src/lib/serverSession.ts');
+const {validLogin,sessionUser,sessionPrincipal,issueSession,demoEnabled,viewableOfficer}=load('src/lib/serverSession.ts');
 const officer=(pno,pin)=>({
   id:'usr_real_1',pno,fullName:'Real Officer',rank:'SHO',role:'SHO',status:'ACTIVE',
   passwordHash:'test-salt:'+crypto.scryptSync(pin,'test-salt',64).toString('hex'),
   unit:{id:'unit-real',code:'REAL-01',name:'PS Test',district:'Panipat'},
 });
 
-test('demo login returns before touching the database, so an unseeded or unreachable database cannot break it',async()=>{
+test('database login verifies the assigned PIN and rejects wrong credentials',async()=>{
+  process_.env.NODE_ENV='test';dbUnavailable=false;
+  dbUser=officer('HR-04291882','real-pin');
+  const user=await validLogin('HR-04291882','real-pin');
+  assert.equal(user.id,'usr_real_1');assert.equal(user.stationName,'PS Test');
+  assert.equal(await validLogin('HR-04291882','bad-pin'),null);
+  assert.equal(await validLogin('HR-99999999','real-pin'),null);
+  dbUser=null;
+});
+
+test('the legacy demo PIN 123456 no longer grants any account',async()=>{
   process_.env.NODE_ENV='test';dbUser=null;dbUnavailable=true;
-  const demo=DEMO_USERS[0];const before=dbQueries;
-  const user=await validLogin(demo.pno,'123456');
-  assert.equal(user.id,demo.id);assert.equal(dbQueries,before);
+  assert.equal(await validLogin('HR-04291882','123456'),null);
   dbUnavailable=false;
-  assert.equal(await validLogin(demo.pno,'999999'),null);
-  assert.equal(dbQueries,before+1);
+  assert.equal(await validLogin('HR-04291882','123456'),null);
 });
 
 test('retired officer roles resolve to Investigating Officer without changing the officer ID',async()=>{
-  const demo=DEMO_USERS.find(user=>user.id==='usr_duty_1');
-  assert.ok(demo);
-  assert.equal((await validLogin(demo.pno,'123456')).role,'ENQUIRY_OFFICER');
+  process_.env.NODE_ENV='test';dbUnavailable=false;
   for(const retiredRole of ['DUTY_OFFICER','SPECIAL_UNIT_DUTY_OFFICER']){
     dbUser={...officer('QA-IO','test-pin'),role:retiredRole};
     const session=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(dbUser.id)}}));
@@ -58,58 +60,65 @@ test('retired officer roles resolve to Investigating Officer without changing th
   dbUser=null;
 });
 
-test('demo PIN wins over a database password for the same PNO and the real password still works',async()=>{
-  process_.env.NODE_ENV='test';dbUnavailable=false;
-  const demo=DEMO_USERS[0];dbUser=officer(demo.pno,'real-pin');
-  assert.equal((await validLogin(demo.pno,'123456')).id,demo.id);
-  const real=await validLogin(demo.pno,'real-pin');
-  assert.equal(real.id,'usr_real_1');assert.equal(real.stationName,'PS Test');
-  assert.equal(await validLogin(demo.pno,'bad-pin'),null);
+test('DEV-ADMIN requires the configured password and the demo PIN is not special',async()=>{
+  process_.env.NODE_ENV='production';process_.env.CMS_DEVELOPER_ADMIN_PASSWORD='s3cret-password';dbUnavailable=false;dbUser=null;
+  assert.equal(await validLogin('DEV-ADMIN','123456'),null);
+  const dev=await validLogin('DEV-ADMIN','s3cret-password');
+  assert.equal(dev.id,'cms_developer_admin');assert.equal(dev.role,'SUPER_ADMIN');
+  delete process_.env.CMS_DEVELOPER_ADMIN_PASSWORD;
+  assert.equal(await validLogin('DEV-ADMIN','s3cret-password'),null);
+  process_.env.NODE_ENV='test';
 });
 
-test('demo mode enabled on a production build still logs demo users in without a database',async()=>{
-  process_.env.NODE_ENV='production';process_.env.ENABLE_DEMO_LOGIN='true';dbUser=null;dbUnavailable=true;
-  assert.equal(demoEnabled(),true);
-  const demo=DEMO_USERS[1];const before=dbQueries;
-  assert.equal((await validLogin(demo.pno,'123456')).id,demo.id);
-  assert.equal(dbQueries,before);
-  assert.equal((await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(demo.id,undefined,true)}}))).id,demo.id);
-  delete process_.env.ENABLE_DEMO_LOGIN;
+test('one-click officer resolution falls back to the seeded account store when the database has no such user',async()=>{
+  process_.env.NODE_ENV='test';dbUser=null;dbUnavailable=false;
+  storeAccount={id:'acc_1',pno:'HR-11111111',fullName:'Store Officer',beltNumber:'1111',rank:'INSPECTOR',
+    role:'SHO',roleDisplay:'Station House Officer (SHO)',status:'ACTIVE',policeStation:'PS Store',
+    assignedUnitId:'unit-store',district:'Panipat',authorizedPoliceStations:['PS Store']};
+  const resolved=await viewableOfficer('acc_1');
+  assert.equal(resolved.id,'acc_1');assert.equal(resolved.stationName,'PS Store');
+  assert.equal(await viewableOfficer('missing-id'),null);
+  storeAccount=null;
 });
 
-test('an opted-out deployment rejects the demo PIN and demo sessions',async()=>{
-  process_.env.NODE_ENV='production';delete process_.env.ENABLE_DEMO_LOGIN;process_.env.DISABLE_DEMO_LOGIN='true';dbUser=null;dbUnavailable=false;
+test('an opted-out deployment rejects one-click demo resolution but keeps database logins',async()=>{
+  process_.env.NODE_ENV='production';process_.env.DISABLE_DEMO_LOGIN='true';dbUnavailable=false;dbUser=null;
   assert.equal(demoEnabled(),false);
-  const demo=DEMO_USERS[0];
-  assert.equal(await validLogin(demo.pno,'123456'),null);
-  assert.equal(await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(demo.id,undefined,true)}})),null);
+  storeAccount={id:'acc_1',pno:'HR-11111111',fullName:'Store Officer',beltNumber:'1111',rank:'INSPECTOR',
+    role:'SHO',roleDisplay:'Station House Officer (SHO)',status:'ACTIVE',policeStation:'PS Store',
+    assignedUnitId:'unit-store',district:'Panipat',authorizedPoliceStations:['PS Store']};
+  assert.equal(await viewableOfficer('acc_1'),null);
+  storeAccount=null;
+  // A session token issued for an account that only existed as a demo profile no longer resolves.
+  assert.equal(await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession('acc_1',undefined,true)}})),null);
+  // Database credentials remain the source of truth in opted-out deployments.
+  dbUser=officer('HR-04291882','real-pin');
+  assert.equal((await validLogin('HR-04291882','real-pin')).id,'usr_real_1');
+  dbUser=null;
   delete process_.env.DISABLE_DEMO_LOGIN;
   process_.env.NODE_ENV='test';
 });
 
 test('view-as resolves the viewed officer from the developer session and falls back safely',async()=>{
-  process_.env.NODE_ENV='test';dbUser=null;dbUnavailable=true;
+  process_.env.NODE_ENV='test';dbUnavailable=false;dbUser=null;
   const developer='cms_developer_admin';
-  const sho=DEMO_USERS.find(u=>u.role==='SHO');
-  const sp=DEMO_USERS[0];
-  // The developer session with a view-as marker resolves to the viewed officer, including the SP.
-  const shoView=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,sho.id)}}));
-  assert.equal(shoView.id,sho.id);assert.equal(shoView.stationName,sho.stationName);
-  const spView=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,sp.id)}}));
-  assert.equal(spView.id,sp.id);
+  dbUser=officer('HR-04291882','real-pin');
+  // The developer session with a view-as marker resolves to the viewed officer.
+  const view=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,dbUser.id)}}));
+  assert.equal(view.id,dbUser.id);assert.equal(view.stationName,dbUser.unit.name);
   // The principal still exposes the real developer session behind the view.
-  const principal=await sessionPrincipal(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,sp.id)}}));
-  assert.equal(principal.userId,developer);assert.equal(principal.viewAs,sp.id);
+  const principal=await sessionPrincipal(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,dbUser.id)}}));
+  assert.equal(principal.userId,developer);assert.equal(principal.viewAs,dbUser.id);
   // Unknown targets and the developer identity itself fall back to the developer's own session.
   const fallback=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,'missing-id')}}));
   assert.equal(fallback.id,developer);
   const self=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer,undefined,false,developer)}}));
   assert.equal(self.id,developer);
   // A non-developer session never gains another identity through a view-as marker.
-  const dsp=DEMO_USERS.find(u=>u.role==='DSP_SUBDIV');
-  const unaffected=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(dsp.id,undefined,true,sho.id)}}));
-  assert.equal(unaffected.id,dsp.id);
+  const unaffected=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(dbUser.id,undefined,false,dbUser.id)}}));
+  assert.equal(unaffected.id,dbUser.id);
   // Without a marker (after exiting) the developer's own identity returns.
   const exited=await sessionUser(new Request('http://local',{headers:{cookie:'cms_session='+issueSession(developer)}}));
   assert.equal(exited.id,developer);
+  dbUser=null;
 });

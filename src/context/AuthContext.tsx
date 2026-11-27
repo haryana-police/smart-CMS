@@ -2,8 +2,13 @@
 import React,{createContext,useContext,useEffect,useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {UserSession} from '@/types';
-import {DEMO_USERS} from '@/lib/mockData';
 import {firPersistence} from '@/services/persistentFirService';
+
+// Placeholder identity shown only while the real session has not resolved yet.
+// It is not a login account: the server never recognizes this id.
+const UNAUTHENTICATED: UserSession = { id: 'cms_unauthenticated', pno: '', name: 'Not signed in',
+  rank: 'INSPECTOR', rankDisplay: '', role: 'VIEWER_AUDITOR', roleDisplay: '',
+  stationName: '', stationCode: '', district: '' };
 interface AuthContextType {
   /** The identity the UI is acting as: the viewed officer while in view-as, else the signed-in user. */
   currentUser:UserSession;
@@ -21,7 +26,7 @@ interface AuthContextType {
 const AuthContext=createContext<AuthContextType|undefined>(undefined);
 export function AuthProvider({children}:{children:React.ReactNode}){
  const router=useRouter();
- const [currentUser,setCurrentUser]=useState(DEMO_USERS[0]),[sessionUser,setSessionUser]=useState(DEMO_USERS[0]),[isViewAs,setViewAs]=useState(false),[switching,setSwitching]=useState(false),[isAuthenticated,setAuthenticated]=useState(false),[ready,setReady]=useState(false);
+ const [currentUser,setCurrentUser]=useState(UNAUTHENTICATED),[sessionUser,setSessionUser]=useState(UNAUTHENTICATED),[isViewAs,setViewAs]=useState(false),[switching,setSwitching]=useState(false),[isAuthenticated,setAuthenticated]=useState(false),[ready,setReady]=useState(false);
  async function accept(user:UserSession,realUser?:UserSession,viewAs=false){setSwitching(true);setAuthenticated(false);localStorage.setItem('haryana_police_cms_user',user.id);localStorage.removeItem('cms_demo_logged_out');try{await firPersistence.hydrate(user).catch(()=>{});}finally{setCurrentUser(user);setSessionUser(realUser||user);setViewAs(viewAs);setAuthenticated(true);setSwitching(false);window.dispatchEvent(new CustomEvent('cms_user_switched',{detail:user}));}}
  useEffect(() => {
    let active = true;

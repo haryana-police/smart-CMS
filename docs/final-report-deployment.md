@@ -12,6 +12,6 @@ The application requires three new tables: `FirFinalReport`, `FirFinalReportAccu
 
 Challan classification accepts only `Complete` and `Partial`. Final-report reason and investigation status are separate fields. Final Submit saves the report and its accused rows atomically; updates retain earlier event snapshots. Forwarding notifies the station SHO and waits for review. The SHO must view the saved revision before Approve or Reject is enabled. Approval places the report Under Checking; rejection requires a reason and returns it to the assigned IO with a backend notification. An edited revision requires fresh forwarding and review. Submitting CHI in Part B moves completed investigations to Completed Cases and continued investigations to Partial. CO clearance is not the transition trigger.
 
-Existing legacy reports are not automatically backfilled. New structured reports use the backend workflow board in Part B. Demo persona authentication remains unchanged as requested; this feature does not implement production authentication.
+Existing legacy reports are not automatically backfilled. New structured reports use the backend workflow board in Part B. The hardcoded demo personas were later removed from the codebase; authentication resolves seeded database accounts and the configured developer administrator.
 
 Validation: `node --test tests/final-report.test.cjs tests/final-report-db.test.cjs` uses an isolated PostgreSQL schema. `tests/fixtures/final-report-qa-schema.sql` is the PostgreSQL test fixture, not a migration for arbitrary deployed schemas.

@@ -27,7 +27,6 @@ import { firService } from "./firService";
 import { ComplaintService } from "./complaintService";
 import { GeneralDiaryService } from "./generalDiaryService";
 import { RegistrationService } from "./registrationService";
-import { DEMO_USERS } from "@/lib/mockData";
 
 // Calculate days between two dates
 function getDaysDiff(dateStr: string): number {

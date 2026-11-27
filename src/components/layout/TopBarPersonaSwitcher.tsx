@@ -5,7 +5,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { UserCog } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { DEMO_USERS } from "@/lib/mockData";
 import { UserSession } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -71,10 +70,7 @@ export function TopBarPersonaSwitcher({ isMobile = false }: TopBarPersonaSwitche
       .then(response => response.ok ? response.json() : null)
       .then(data => {
         if (!data || controller.signal.aborted) return;
-        const roster = data.officers as SwitchableOfficer[];
-        const rosterIds = new Set(roster.map(officer => officer.id));
-        const demos = data.includeDemoPersonas ? DEMO_USERS.filter(officer => !rosterIds.has(officer.id)) : [];
-        setOfficers([...demos, ...roster]);
+        setOfficers(data.officers as SwitchableOfficer[]);
       })
       .catch(() => {});
     return () => controller.abort();

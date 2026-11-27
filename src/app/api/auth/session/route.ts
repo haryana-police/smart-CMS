@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import {issueSession,sessionUser,sessionPrincipal,viewableOfficer,developerAdminUser,validLogin,sameOrigin,demoEnabled,demoPersonasEnabled,usesDemoSession,SESSION_DURATION_MS,REMEMBERED_ADMIN_DURATION_MS} from '@/lib/serverSession';
+import {issueSession,sessionUser,sessionPrincipal,viewableOfficer,developerAdminUser,validLogin,sameOrigin,demoEnabled,usesDemoSession,SESSION_DURATION_MS,REMEMBERED_ADMIN_DURATION_MS} from '@/lib/serverSession';
 export const runtime='nodejs';
 const cookieOptions=(req:Request,expires:number)=>({httpOnly:true,sameSite:'strict' as const,secure:req.url.startsWith('https://'),path:'/',expires:new Date(expires)});
 export async function GET(req:Request){
@@ -11,7 +11,7 @@ export async function GET(req:Request){
   const autoIssued=!user&&localAutoAdmin;
   const activeUser=autoIssued?developerAdminUser():user;
   const viewAsActive=Boolean(principal&&principal.userId==='cms_developer_admin'&&principal.viewAs&&activeUser&&activeUser.id!=='cms_developer_admin');
-  const response=NextResponse.json({user:activeUser,sessionUser:viewAsActive?developerAdminUser():activeUser,viewAsActive,demoEnabled:demoPersonasEnabled(),officerPickerEnabled:demoEnabled(),localAutoAdmin},{status:activeUser?200:401,headers:{'Cache-Control':'no-store'}});
+  const response=NextResponse.json({user:activeUser,sessionUser:viewAsActive?developerAdminUser():activeUser,viewAsActive,officerPickerEnabled:demoEnabled(),localAutoAdmin},{status:activeUser?200:401,headers:{'Cache-Control':'no-store'}});
   if(autoIssued&&activeUser){
     const expires=Date.now()+REMEMBERED_ADMIN_DURATION_MS;
     response.cookies.set('cms_session',issueSession(activeUser.id,undefined,false,null,expires),cookieOptions(req,expires));
@@ -49,7 +49,7 @@ export async function POST(req:Request){
   const user = await validLogin(b.pno||'',b.pin||'');
   if(!user)return NextResponse.json({error:'Invalid PNO or PIN. Production login must be configured.'},{status:401});
   if(b.station && b.station !== user.stationName)return NextResponse.json({error:'Selected station does not match your assignment.'},{status:403});
-  const rememberAdmin = b.rememberDevice && user.id === 'cms_developer_admin' && b.pin !== '123456';
+  const rememberAdmin = b.rememberDevice && user.id === 'cms_developer_admin';
   const expires = Date.now() + (rememberAdmin ? REMEMBERED_ADMIN_DURATION_MS : SESSION_DURATION_MS);
   const response=NextResponse.json({user,sessionUser:user,viewAsActive:false});response.cookies.set('cms_session',issueSession(user.id,undefined,usesDemoSession(user),null,expires),cookieOptions(req,expires));return response;
   }catch{return NextResponse.json({error:'Invalid login request'},{status:400});}

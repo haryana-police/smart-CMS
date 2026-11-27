@@ -1,5 +1,5 @@
 import { apiAccess, forbidden } from '@/lib/apiSecurity';
-import { demoEnabled, demoPersonasEnabled, sessionPrincipal } from '@/lib/serverSession';
+import { demoEnabled, sessionPrincipal } from '@/lib/serverSession';
 import {
   getAllAccounts,
   createAccount,
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
       district: account.district,
       stationName: account.policeStation,
     }));
-    return Response.json({ officers, includeDemoPersonas: demoPersonasEnabled() }, { headers: { 'Cache-Control': 'no-store' } });
+    return Response.json({ officers }, { headers: { 'Cache-Control': 'no-store' } });
   }
   const actor = await apiAccess(req);
   if (actor instanceof Response) return actor;

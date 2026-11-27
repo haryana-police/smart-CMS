@@ -48,7 +48,7 @@ import {
   AuthUserContext,
   canViewComplaint,
 } from "@/utils/complaintPermissions";
-import { DEMO_USERS, MOCK_COMPLAINTS, MOCK_HISTORICAL_FIRS } from "@/lib/mockData";
+import { MOCK_COMPLAINTS, MOCK_HISTORICAL_FIRS } from "@/lib/mockData";
 import { ComplaintRegistrationInput } from "@/lib/validations/complaint";
 import { GeneralDiaryService } from "./generalDiaryService";
 import { GeneralDiaryRecord } from "@/types/generalDiary";
@@ -120,8 +120,10 @@ let hydrated=false;
 let hydration:Promise<void>|undefined;
 let serverSnapshot=new Map<string,ComplaintItem>();
 function currentComplaintUser():AuthUserContext|undefined {
- if(typeof window==='undefined')return undefined;
- return DEMO_USERS.find(u=>u.id===window.localStorage.getItem('haryana_police_cms_user'));
+ // Legacy client-side persona lookup removed with the demo accounts. The signed-in
+ // session user is always passed explicitly by the API routes; callers without an
+ // explicit user fall back to undefined exactly as they did for non-persona users.
+ return undefined;
 }
 function loadComplaintsFromStorage():ComplaintItem[]{
  if(typeof window==='undefined')return complaintsStore.length?complaintsStore:MOCK_COMPLAINTS.map(c=>stabilizeComplaint(c));

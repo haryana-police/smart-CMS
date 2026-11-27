@@ -8,7 +8,7 @@ const process_={...process,cwd:()=>temp,env:{...process.env,NODE_ENV:'test',CMS_
 function load(file){if(modules.has(file))return modules.get(file);const exports={};modules.set(file,exports);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
 vm.runInNewContext(code,{exports,console,Date,Intl,Map,Set,Buffer,URL,Request,Response,structuredClone,crypto:require('node:crypto').webcrypto,globalThis:{},process:process_,setTimeout,queueMicrotask,window,CustomEvent,fetch:async(url,options={})=>{if(failSave&&options.method==='POST')return Response.json({error:'Simulated backend failure'},{status:503});const auth=load('src/lib/serverSession.ts');const req=new Request('http://local'+url,{...options,headers:{...options.headers,cookie:'cms_session='+auth.issueSession(actor)}});return (options.method==='POST'?route.POST:route.GET)(req);},require(n){
  if(n==='@/lib/prisma')return {prisma:{user:{findUnique:async({where})=>{
-   const person=DEMO_USERS.find(row=>row.id===where.id || row.pno===where.pno);
+   const person=USERS.find(row=>row.id===where.id || row.pno===where.pno);
    if(!person || (where.pno && person.id!=='usr_sho_1'))return null;
    return {...person,fullName:person.name,status:'ACTIVE',passwordHash:'test-salt:'+require('node:crypto').scryptSync('test-secret-pin','test-salt',64).toString('hex'),
      unit:alternatePosting && person.id==='usr_sho_1' ? alternatePosting : {id:'unit-'+person.stationCode,code:person.stationCode,name:person.stationName,district:person.district}};
@@ -22,8 +22,16 @@ vm.runInNewContext(code,{exports,console,Date,Intl,Map,Set,Buffer,URL,Request,Re
  if(n.startsWith('.'))return load(path.join(path.dirname(file),n+'.ts'));
  return require(n);
  }});return exports;}
+// Local fixture accounts replacing the removed hardcoded demo personas. The fake
+// prisma User table serves these rows so the integrity tests stay self-contained.
+const USERS=[
+ {id:'usr_sho_1',pno:'HR-04291882',name:'Inspector Rajesh Kumar',rank:'INSPECTOR',role:'SHO',roleDisplay:'Station House Officer (SHO)',stationName:'PS City Panipat',stationCode:'HAR-PNP-PS-01',district:'Panipat'},
+ {id:'usr_mhc_1',pno:'HR-05192834',name:'HC Devinder Kumar',rank:'HEAD_CONSTABLE',role:'MHC_GD_INCHARGE',roleDisplay:'Moharrir Head Constable (MHC)',stationName:'PS City Panipat',stationCode:'HAR-PNP-PS-01',district:'Panipat'},
+ {id:'usr_eo_1',pno:'HR-07182930',name:'Sub-Inspector Vikram Singh',rank:'SUB_INSPECTOR',role:'ENQUIRY_OFFICER',roleDisplay:'Investigating Officer (IO)',stationName:'PS City Panipat',stationCode:'HAR-PNP-PS-01',district:'Panipat'},
+ {id:'usr_eo_2',pno:'HR-07182931',name:'Sub-Inspector Naresh Kumar',rank:'SUB_INSPECTOR',role:'ENQUIRY_OFFICER',roleDisplay:'Investigating Officer (IO)',stationName:'PS City Panipat',stationCode:'HAR-PNP-PS-01',district:'Panipat'},
+];
 route=load('src/app/api/complaints/route.ts');
-const {DEMO_USERS}=load('src/lib/mockData.ts'),{issueSession,sessionUser,validLogin}=load('src/lib/serverSession.ts'),permissions=load('src/utils/complaintPermissions.ts');
+const {issueSession,sessionUser,validLogin}=load('src/lib/serverSession.ts'),permissions=load('src/utils/complaintPermissions.ts');
 const {nextComplaintNumber}=load('src/lib/complaintNumber.ts'),integrity=load('src/lib/complaintIntegrity.ts');
 const {ComplaintService:s}=load('src/services/complaintService.ts');
 const payload={source:'WALK_IN_STATION',category:'OTHER_GENERAL',priority:'ROUTINE',incidentDate:'2026-10-27',incidentPlace:'Test place',complainantName:'Test Citizen',complainantMobile:'9999999999',complainantAddress:'Test address',complainantCity:'Panipat',complainantDistrict:'Panipat',accusedList:[]};
@@ -146,19 +154,19 @@ test('an existing session resolves a transferred officer against the new posting
 });
 after(()=>fs.rmSync(temp,{recursive:true,force:true}));
 
-test('demo mode allows one-click developer admin while an opted-out deployment still requires the configured password',async()=>{
+test('DEV-ADMIN requires the configured password in every mode; the demo PIN is never special',async()=>{
  const env=process_.env;const previous={NODE_ENV:env.NODE_ENV,PASSWORD:env.CMS_DEVELOPER_ADMIN_PASSWORD,DISABLE:env.DISABLE_DEMO_LOGIN};
  try{
   env.NODE_ENV='production';delete env.CMS_DEVELOPER_ADMIN_PASSWORD;env.DISABLE_DEMO_LOGIN='true';
   assert.equal(await validLogin('DEV-ADMIN','123456'),null);
   delete env.DISABLE_DEMO_LOGIN;env.NODE_ENV='test';
-  const demoAdmin=await validLogin('DEV-ADMIN','123456');
-  assert.equal(demoAdmin.id,'cms_developer_admin');assert.equal(demoAdmin.role,'SUPER_ADMIN');
+  assert.equal(await validLogin('DEV-ADMIN','123456'),null);
   env.NODE_ENV='production';env.CMS_DEVELOPER_ADMIN_PASSWORD='test-dev-password';
   assert.equal((await validLogin('DEV-ADMIN','test-dev-password')).id,'cms_developer_admin');
-  assert.equal((await validLogin('DEV-ADMIN','123456')).id,'cms_developer_admin');
-  env.DISABLE_DEMO_LOGIN='true';
   assert.equal(await validLogin('DEV-ADMIN','123456'),null);
+  // The password path stays available in opted-out (operational) deployments.
+  env.DISABLE_DEMO_LOGIN='true';
+  assert.equal((await validLogin('DEV-ADMIN','test-dev-password')).id,'cms_developer_admin');
  }finally{
   env.NODE_ENV=previous.NODE_ENV;
   if(previous.PASSWORD===undefined)delete env.CMS_DEVELOPER_ADMIN_PASSWORD;else env.CMS_DEVELOPER_ADMIN_PASSWORD=previous.PASSWORD;

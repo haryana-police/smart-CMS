@@ -249,7 +249,7 @@ test('view-as enters an officer ID with the developer session and never signs a 
  const {load}=environment({}, {
   'next/server':{NextResponse:{json:(body,options)=>{const r=Response.json(body,options);r.cookies={set(){cookies++;}};return r;}}},
   '@/lib/serverSession':{
-    sameOrigin:()=>true,demoEnabled:()=>true,demoPersonasEnabled:()=>false,usesDemoSession:()=>false,
+    sameOrigin:()=>true,demoEnabled:()=>true,usesDemoSession:()=>false,
     SESSION_DURATION_MS:8*60*60*1000,REMEMBERED_ADMIN_DURATION_MS:7*24*60*60*1000,
     sessionUser:async()=>effective,sessionPrincipal:async()=>principal,
     viewableOfficer:async(id)=>id==='usr_sp_1'?{...officer,id:'usr_sp_1',role:'SP_DISTRICT'}:(id==='usr_sho_1'?officer:null),
