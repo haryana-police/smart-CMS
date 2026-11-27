@@ -5,7 +5,6 @@ import { useGuardedRouter as useRouter } from "@/hooks/useGuardedRouter";
 import { Shield, Lock, User, AlertCircle, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { DEMO_USERS } from "@/lib/mockData";
 
 type OfficerCard = {
   id: string;
@@ -28,7 +27,7 @@ export default function LoginPage() {
   const [officerSearch, setOfficerSearch] = useState("");
   const pinInput = React.useRef<HTMLInputElement>(null);
   const isDeveloper = isAuthenticated && sessionUser.id === "cms_developer_admin";
-  const showOfficerPicker = (pickerEnabled && !demo) || (localAutoAdmin && isDeveloper);
+  const showOfficerPicker = pickerEnabled || (localAutoAdmin && isDeveloper);
   React.useEffect(() => {
     fetch("/api/auth/session", { cache: "no-store" }).then(response => response.json()).then(data => {
       setDemo(data.demoEnabled === true);
@@ -57,13 +56,6 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [selectedDistrict, setSelectedDistrict] = useState<string>("Panipat");
-  const districts = React.useMemo(() => {
-    return Array.from(new Set(DEMO_USERS.map((u) => u.district)));
-  }, []);
-
-  const personaList = React.useMemo(() => {
-    return DEMO_USERS.filter((u) => u.district === selectedDistrict);
-  }, [selectedDistrict]);
   const officerDistricts = [...new Set(officers.map(officer => officer.district))];
   const officerDistrict = officerDistricts.includes(selectedDistrict) ? selectedDistrict : officerDistricts[0];
   const districtOfficers = officers.filter(officer => officer.district === officerDistrict);
@@ -118,18 +110,6 @@ export default function LoginPage() {
   const openDeveloperRoster = () => {
     void quickLogin("cms_developer_admin", "Developer admin login failed.");
   };
-  const handleQuickDemoLogin = async (userId:string) => {
-    if (!demo || isLoading) return;
-    const user = DEMO_USERS.find(u=>u.id===userId); if(!user)return;
-    setPno(user.pno); setPin('123456'); setError(null); setIsLoading(true);
-    try {
-      const ok = await login(user.pno, '123456');
-      if (ok) router.push('/');
-      else setError((window as any).__lastLoginError || 'Demo login failed. Please retry.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleOfficerView = async (officer: OfficerCard) => {
     await quickLogin(officer.id, "Officer account could not be opened.");
@@ -164,7 +144,7 @@ export default function LoginPage() {
         </div>
 
         {/* Two-Column Split Layout: Half Left (Login Form) & Half Right (Demo Personas) */}
-        <div className={`grid grid-cols-1 ${demo || showOfficerPicker ? 'lg:grid-cols-2' : 'max-w-md mx-auto'} gap-6 items-stretch`}>
+        <div className={`grid grid-cols-1 ${showOfficerPicker ? 'lg:grid-cols-2' : 'max-w-md mx-auto'} gap-6 items-stretch`}>
           {/* Half Left: Police Personnel Login Card */}
           <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 sm:p-7 text-slate-900 flex flex-col justify-between">
             <div>
@@ -328,89 +308,6 @@ export default function LoginPage() {
             </section>
           )}
 
-          {/* Half Right: Demo Personas by District & Developer Access Card */}
-          {demo && !showOfficerPicker && (
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 sm:p-7 text-slate-900 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900">Demo Personas by District</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Click any official role to sign in instantly</p>
-                  </div>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-semibold px-2 py-0.5 rounded">
-                    1-Click Login
-                  </span>
-                </div>
-
-                {/* District Selector Chips */}
-                <div className="flex flex-wrap items-center gap-1.5 pb-2 mb-2.5 text-[11px]">
-                  {districts.map((dist) => (
-                    <button
-                      key={dist}
-                      type="button"
-                      onClick={() => setSelectedDistrict(dist)}
-                      className={`px-2.5 py-1 rounded-md font-medium whitespace-nowrap transition-all cursor-pointer ${
-                        selectedDistrict === dist
-                          ? "bg-[#203c88] text-white hover:bg-[#1a3170] hover:text-white font-semibold shadow-2xs"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
-                      }`}
-                    >
-                      {dist}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Personas List */}
-                <div className="grid grid-cols-1 gap-1.5 max-h-64 sm:max-h-72 overflow-y-auto pr-0.5">
-                  {personaList.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => handleQuickDemoLogin(u.id)}
-                      type="button"
-                      className="w-full text-left p-2.5 rounded-lg bg-slate-50 hover:bg-blue-50/60 border border-slate-200 hover:border-blue-300 flex items-center justify-between transition-colors group cursor-pointer"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-semibold text-slate-800 truncate">
-                            {u.name}
-                          </p>
-                          <span className="text-[9px] bg-slate-200 text-slate-700 px-1 py-0.2 rounded font-mono font-bold">
-                            {u.rank.slice(0, 3)}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                          {u.roleDisplay} • PNO: <span className="font-mono text-slate-700">{u.pno}</span>
-                        </p>
-                      </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Developer Access */}
-              <div className="mt-4 pt-3 border-t border-slate-200">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Developer Access</span>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-semibold px-1.5 py-0.5 rounded">1-Click Login</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDeveloperLogin}
-                  disabled={isLoading}
-                  className="w-full text-left p-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-60 border border-slate-800 flex items-center justify-between transition-colors group cursor-pointer"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white">Developer Admin</p>
-                    <p className="text-[10px] text-slate-200 mt-0.5">
-                      PNO: <span className="font-mono text-amber-300">DEV-ADMIN</span> • 1-Click Login • Enter any officer ID view
-                    </p>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-200 group-hover:text-white shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Security Notice */}
