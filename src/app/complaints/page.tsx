@@ -977,6 +977,18 @@ function ComplaintListContent() {
   const visibleColumnCount = columnOrder.filter((col) => visibleColumns[col]).length
     + (visibleColumns.action ? 1 : 0);
   const hasColumnSearch = Object.values(columnSearch).some((term) => term.trim());
+
+  function clearComplaintFilters() {
+    setSearchQuery("");
+    setColumnSearch({});
+    setActiveSearchCol(null);
+    setSelectedStatuses([...ALL_STATUS_KEYS]);
+    setPriorityFilter("ALL");
+    setCategoryFilter("ALL");
+    setDateFrom("");
+    setDateTo("");
+  }
+
   const emptyComplaints = (
     <EmptyState
       title={hasColumnSearch ? "No matching complaints" : "No complaints found"}
@@ -986,16 +998,7 @@ function ComplaintListContent() {
           ? "Complaints assigned to you will appear here when they match the current filters."
           : "Try clearing your search or changing the selected filters."}
       actionLabel="Clear Filters"
-      onAction={() => {
-        setSearchQuery("");
-        setColumnSearch({});
-        setActiveSearchCol(null);
-        setSelectedStatuses([...ALL_STATUS_KEYS]);
-        setPriorityFilter("ALL");
-        setCategoryFilter("ALL");
-        setDateFrom("");
-        setDateTo("");
-      }}
+      onAction={clearComplaintFilters}
     />
   );
   const renderComplaintColumnHeader = (colKey: ComplaintColKey) => {
@@ -2111,14 +2114,7 @@ function ComplaintListContent() {
               : "Try clearing your search query or selecting different statuses from the status dropdown."
           }
           actionLabel="Clear Filters"
-          onAction={() => {
-            setSearchQuery("");
-            setSelectedStatuses([...ALL_STATUS_KEYS]);
-            setPriorityFilter("ALL");
-            setCategoryFilter("ALL");
-            setDateFrom("");
-            setDateTo("");
-          }}
+          onAction={clearComplaintFilters}
         />
       ) : (
         <div className="space-y-4">

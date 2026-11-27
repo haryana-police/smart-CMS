@@ -108,6 +108,11 @@ export function ComplaintReceiptModal({
     .filter(Boolean)
     .join(", ");
 
+  const respondents = (complaint.accusedList ?? []).filter((person) =>
+    [person.name, person.alias, person.fatherName, person.relativeName, person.address, person.phone, person.relationWithComplainant]
+      .some((value) => value?.trim())
+  );
+
   return (
     <div
       role="dialog"
@@ -256,6 +261,33 @@ export function ComplaintReceiptModal({
                 </span>
               </div>
             </div>
+
+            {respondents.length > 0 && (
+              <section className="border border-slate-400 bg-white p-3.5 text-xs sm:text-sm font-sans">
+                <h2 className="border-b border-slate-300 pb-2 font-bold uppercase tracking-wide text-slate-950">
+                  Respondent Details
+                </h2>
+                <ol className="divide-y divide-slate-200">
+                  {respondents.map((person, index) => (
+                    <li key={person.id ?? index} className="break-inside-avoid space-y-1 py-2 [overflow-wrap:anywhere]">
+                      <p className="font-bold text-slate-950">
+                        {respondents.length > 1 && `${index + 1}. `}
+                        {person.name?.trim() || "Name not specified"}
+                        {person.alias?.trim() && <span className="font-normal"> (Alias: {person.alias.trim()})</span>}
+                      </p>
+                      {(person.fatherName?.trim() || person.relativeName?.trim()) && (
+                        <p><strong>{person.fatherName?.trim() ? "Father / Guardian:" : "Relative:"}</strong> {person.fatherName?.trim() || person.relativeName?.trim()}</p>
+                      )}
+                      {person.relationWithComplainant?.trim() && (
+                        <p><strong>Relation to complainant:</strong> {person.relationWithComplainant.trim()}</p>
+                      )}
+                      {person.address?.trim() && <p><strong>Address:</strong> {person.address.trim()}</p>}
+                      {person.phone?.trim() && <p><strong>Mobile No:</strong> {person.phone.trim()}</p>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
 
             {/* Officer Particulars */}
             <div className="grid grid-cols-2 gap-3 font-sans">
