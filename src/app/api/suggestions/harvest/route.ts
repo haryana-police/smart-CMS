@@ -20,14 +20,21 @@ export async function GET(req: Request) {
       }
     }
 
-    const aggregatedWords = new Set<string>();
+    const wordCounts = new Map<string, number>();
     const aggregatedPhrases = new Set<string>();
+    // Document frequency: how many distinct records/sources contain a word.
+    // Powers the Hindi auto-correct corpus suggestions ("did you mean").
+    const addWord = (w: string | undefined | null) => {
+      if (!w) return;
+      const clean = String(w).trim();
+      if (clean) wordCounts.set(clean, (wordCounts.get(clean) ?? 0) + 1);
+    };
 
     for (const r of visibleRecords) {
       // 1. Raw extracted text from PDF/Doc/OCR
       if (r.extractedText) {
         const res = extractVocabulary(r.extractedText);
-        res.words.forEach((w) => aggregatedWords.add(w));
+        res.words.forEach((w) => addWord(w));
         res.phrases.forEach((p) => aggregatedPhrases.add(p));
       }
 
@@ -60,7 +67,7 @@ export async function GET(req: Request) {
 
         if (sd.incident?.summary) {
           const res = extractVocabulary(sd.incident.summary);
-          res.words.forEach((w) => aggregatedWords.add(w));
+          res.words.forEach((w) => addWord(w));
           res.phrases.forEach((p) => aggregatedPhrases.add(p));
         }
 
@@ -68,7 +75,7 @@ export async function GET(req: Request) {
           sd.legalSections.forEach((sec: any) => {
             const secStr = typeof sec === "string" ? sec : sec?.section || sec?.name || "";
             if (secStr) {
-              aggregatedWords.add(secStr);
+              addWord(secStr);
               aggregatedPhrases.add(`धारा ${secStr}`);
               aggregatedPhrases.add(`Section ${secStr}`);
             }
@@ -77,17 +84,20 @@ export async function GET(req: Request) {
 
         if (Array.isArray(sd.vehicles)) {
           sd.vehicles.forEach((v: any) => {
-            if (v.regNumber || v.number) aggregatedWords.add(v.regNumber || v.number);
-            if (v.model) aggregatedWords.add(v.model);
+            if (v.regNumber || v.number) addWord(v.regNumber || v.number);
+            if (v.model) addWord(v.model);
           });
         }
       }
     }
 
+    const sortedWords = Array.from(wordCounts.entries()).sort((a, b) => b[1] - a[1]);
+
     return NextResponse.json({
       success: true,
       totalDocumentsScanned: visibleRecords.length,
-      words: Array.from(aggregatedWords).slice(0, 2000),
+      words: sortedWords.slice(0, 2000).map(([w]) => w),
+      counts: Object.fromEntries(sortedWords.slice(0, 3000)),
       phrases: Array.from(aggregatedPhrases).slice(0, 800),
     });
   } catch (err: any) {

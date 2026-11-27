@@ -67,16 +67,56 @@ export function VerbatimSelectionButton({ editorRef, onChange }: {
   );
 }
 
-export function HindiSuggestionButton({ word, onAccept }: { word: string; onAccept: () => void }) {
+export function HindiSuggestionChip({
+  word,
+  wrong,
+  position,
+  onAccept,
+  onReject,
+}: {
+  word: string;
+  wrong?: string;
+  /** Viewport position of the flagged word; when absent the chip renders inline. */
+  position?: { top: number; left: number };
+  onAccept: () => void;
+  onReject?: () => void;
+}) {
+  const floating =
+    position && Number.isFinite(position.top) && position.top >= 0 && Number.isFinite(position.left);
+  const acceptTitle = wrong ? `"${wrong}" को "${word}" में बदलें (सुझाव लागू करें)` : "सुझाव लागू करें";
   return (
-    <button
-      type="button"
-      title="सुझाव लागू करें"
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={onAccept}
-      className="no-print inline-flex items-center rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800"
+    <div
+      className={
+        floating
+          ? "no-print fixed z-50 flex items-center gap-1 rounded-lg border border-blue-300 bg-white p-0.5 shadow-lg"
+          : "no-print inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white p-0.5 shadow-2xs"
+      }
+      style={
+        floating
+          ? { top: position!.top, left: position!.left }
+          : undefined
+      }
     >
-      सुझाव · {word}
-    </button>
+      <button
+        type="button"
+        title={acceptTitle}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onAccept}
+        className="no-print inline-flex items-center rounded border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-100"
+      >
+        सुझाव · {word}
+      </button>
+      {onReject && (
+        <button
+          type="button"
+          title="यह सुझाव अब न दिखाएँ"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onReject}
+          className="no-print inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100"
+        >
+          ✕
+        </button>
+      )}
+    </div>
   );
 }

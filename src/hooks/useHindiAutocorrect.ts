@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { suggestionStore } from "@/lib/suggestionStore";
 import {
   HINDI_BOUNDARY_CHAR_RE,
   HINDI_WORD_CHAR_RE,
@@ -9,6 +10,9 @@ import {
   isFollowedByWordChar,
   isPrecededByWordChar,
   lookupHindiCorrection,
+  normalizeHindi,
+  suggestHindiFromCorpus,
+  type HindiCorrectionBias,
 } from "@/lib/hindiAutocorrect";
 
 const preferenceEvent = "cms:hindi-autocorrect";
@@ -59,13 +63,65 @@ interface PendingCorrection {
   end: number;
   replacement: string;
   delimiter: string;
+  /** The word as the officer typed it (learning key). */
+  wrong: string;
+  /** Viewport position of the flagged word for the floating chip. */
+  top: number;
+  left: number;
 }
 
 export function useHindiReportAutocorrect(protectedDocument: boolean) {
   const { enabled } = useHindiAutocorrectPreference();
   const typed = useRef<{ node: Text; start: number; end: number } | null>(null);
 
+  // Officer learning state (personal silent/suppressed) + document corpus,
+  // refreshed whenever the suggestion store notifies (Phase 2 + 3).
+  const [storeTick, setStoreTick] = useState(0);
+  const bias = useRef<HindiCorrectionBias & { corpus: { word: string; count: number }[] }>({
+    promoted: {},
+    suppressed: {},
+    corpus: [],
+  });
+  useEffect(() => {
+    void suggestionStore.ensureLoaded();
+    const unsubscribe = suggestionStore.subscribe(() => {
+      setStoreTick((t) => t + 1);
+    });
+    return unsubscribe;
+  }, []);
+  useEffect(() => {
+    bias.current = suggestionStore.getHindiCorrectionBias();
+  }, [storeTick]);
+
   const [pending, setPending] = useState<PendingCorrection | null>(null);
+
+  /** Dictionary first, then the corpus "did you mean" (never silent). */
+  const decideCorrection = (word: string) => {
+    if (bias.current.suppressed?.[normalizeHindi(word)]) return null;
+    return (
+      lookupHindiCorrection(word, bias.current) ??
+      suggestHindiFromCorpus(word, bias.current.corpus ?? [])
+    );
+  };
+
+  /** Viewport position of a word span, for the floating suggestion chip. */
+  const wordPosition = (doc: Document, node: Text, start: number, end: number) => {
+    try {
+      const range = doc.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      const box = range.getBoundingClientRect();
+      if (Number.isFinite(box.top) && Number.isFinite(box.left)) {
+        return {
+          top: Math.max(8, Math.round(box.top - 36)),
+          left: Math.max(8, Math.round(box.left)),
+        };
+      }
+    } catch {
+      // detached node - the toolbar fallback still shows the suggestion
+    }
+    return { top: -1, left: -1 };
+  };
 
   /**
    * ENTER / Shift+ENTER completes a word too. By the time the input event runs
@@ -126,7 +182,7 @@ export function useHindiReportAutocorrect(protectedDocument: boolean) {
     const word = node.data.slice(start, end);
     if (!word) return;
 
-    const correction = lookupHindiCorrection(word);
+    const correction = decideCorrection(word);
     if (!correction) return;
 
     // Nothing may follow the word (it is the node tail), but the block may
@@ -134,8 +190,9 @@ export function useHindiReportAutocorrect(protectedDocument: boolean) {
     const block = node.parentElement?.closest("p, div, li, td, th, h1, h2, h3, h4, h5, h6") ?? editor;
     if (blockContainsQuote(block.textContent ?? "")) return;
 
+    const position = wordPosition(doc, node, start, end);
     if (correction.level === "suggested") {
-      setPending({ editor, node, snapshot: node.data, start, end, replacement: correction.replacement, delimiter: "" });
+      setPending({ editor, node, snapshot: node.data, start, end, replacement: correction.replacement, delimiter: "", wrong: word, top: position.top, left: position.left });
       return;
     }
 
@@ -186,7 +243,7 @@ export function useHindiReportAutocorrect(protectedDocument: boolean) {
 
     if (input.isComposing || input.inputType !== "insertText" || !continuesWord || !HINDI_BOUNDARY_CHAR_RE.test(input.data)) return;
     const word = node.data.slice(previous.start, insertedAt);
-    const correction = lookupHindiCorrection(word);
+    const correction = decideCorrection(word);
     if (!correction || isFollowedByWordChar(node.data.slice(end))) return;
 
     const block = node.parentElement?.closest("p, div, li, td, th, h1, h2, h3, h4, h5, h6") ?? editor;
@@ -197,7 +254,8 @@ export function useHindiReportAutocorrect(protectedDocument: boolean) {
     if (isPrecededByWordChar(prefix.toString())) return;
 
     if (correction.level === "suggested") {
-      setPending({ editor, node, snapshot: node.data, start: previous.start, end, replacement: correction.replacement, delimiter: insertedText });
+      const position = wordPosition(editor.ownerDocument, node, previous.start, end);
+      setPending({ editor, node, snapshot: node.data, start: previous.start, end, replacement: correction.replacement, delimiter: insertedText, wrong: word, top: position.top, left: position.left });
       return;
     }
 
@@ -210,14 +268,41 @@ export function useHindiReportAutocorrect(protectedDocument: boolean) {
 
   return {
     onInput,
-    suggestion: enabled && !protectedDocument ? pending?.replacement : undefined,
+    /**
+     * Phase 3: the flagged word, its correction and the viewport position for
+     * the floating chip (the toolbar keeps rendering the same data).
+     */
+    suggestion:
+      enabled && !protectedDocument && pending
+        ? {
+            word: pending.wrong,
+            replacement: pending.replacement,
+            rect: { top: pending.top, left: pending.left },
+          }
+        : undefined,
+    /** Closes the chip without a learning signal (officer kept typing). */
     dismissSuggestion: () => setPending(null),
+    /**
+     * Phase 2 learning: the officer explicitly rejected this correction -
+     * after enough rejects it stops being offered for them.
+     */
+    rejectSuggestion: () => {
+      if (pending) {
+        suggestionStore.recordHindiReject(normalizeHindi(pending.wrong));
+      }
+      setPending(null);
+    },
     acceptSuggestion() {
       setPending(null);
       if (!enabled || protectedDocument || !pending) return;
       const { editor, node, snapshot, start, end, replacement, delimiter } = pending;
       if (!editor.isConnected || !editor.contains(node) || node.data !== snapshot ||
           node.parentElement?.closest(protectedText)) return;
+
+      // Phase 2 learning: repeated accepts promote the correction to a
+      // personal SILENT entry for this officer (Gboard personal dictionary).
+      const typedWrong = node.data.slice(start, end);
+      suggestionStore.recordHindiAccept(normalizeHindi(typedWrong), replacement);
 
       const selection = editor.ownerDocument.getSelection();
       if (!selection) return;

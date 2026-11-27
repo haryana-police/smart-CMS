@@ -14,17 +14,23 @@ const root = path.resolve(__dirname, '..');
  */
 function loadLib() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hindi-ac-'));
-  for (const rel of ['src/lib/hindiAutocorrectData.ts', 'src/lib/hindiAutocorrect.ts']) {
+  for (const rel of [
+    'src/lib/hindiAutocorrectData.ts',
+    'src/lib/hindiAutocorrect.ts',
+    'src/lib/suggestionStore.ts',
+  ]) {
     const source = fs.readFileSync(path.join(root, rel), 'utf8');
     const js = ts.transpileModule(source, {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
     }).outputText;
     fs.writeFileSync(path.join(dir, path.basename(rel).replace(/\.ts$/, '.js')), js);
   }
-  return require(path.join(dir, 'hindiAutocorrect.js'));
+  const lib = require(path.join(dir, 'hindiAutocorrect.js'));
+  const storeModule = require(path.join(dir, 'suggestionStore.js'));
+  return { lib, store: storeModule.suggestionStore };
 }
 
-const lib = loadLib();
+const { lib, store } = loadLib();
 const { lookupHindiCorrection, normalizeHindi } = lib;
 
 test('legacy corrections keep working through the data file', () => {
@@ -132,4 +138,88 @@ test('the data file stays pure ASCII (tooling-safe \\uXXXX convention)', () => {
   const source = fs.readFileSync(path.join(root, 'src/lib/hindiAutocorrectData.ts'), 'utf8');
   const nonAscii = source.match(/[^\x00-\x7F]/g);
   assert.equal(nonAscii, null, 'data file must contain no raw Devanagari bytes');
+});
+
+test('phase 2: promoted corrections act as personal silent entries', () => {
+  const key = normalizeHindi('बताईये');
+  store.recordHindiAccept(key, 'बताइए');
+  // One accept is not enough - the suggestion still comes from the dictionary.
+  assert.equal(lookupHindiCorrection('बताईये', store.getHindiCorrectionBias())?.level, 'suggested');
+  store.recordHindiAccept(key, 'बताइए');
+  const bias = store.getHindiCorrectionBias();
+  assert.equal(bias.promoted[key], 'बताइए');
+  // Now it resolves silently, and the officer's choice outranks the dictionary.
+  const result = lookupHindiCorrection('बताईये', bias);
+  assert.equal(result?.level, 'silent');
+  assert.equal(result?.replacement, 'बताइए');
+});
+
+test('phase 2: suppressed corrections stop being offered', () => {
+  const key = normalizeHindi('सोचिये');
+  store.recordHindiReject(key);
+  store.recordHindiReject(key);
+  const bias = store.getHindiCorrectionBias();
+  assert.equal(bias.suppressed[key], true);
+  assert.equal(lookupHindiCorrection('सोचिये', bias), null);
+});
+
+test('phase 2: an accept clears the suppression again', () => {
+  const key = normalizeHindi('देखिये');
+  store.recordHindiReject(key);
+  store.recordHindiReject(key);
+  assert.equal(lookupHindiCorrection('देखिये', store.getHindiCorrectionBias()), null);
+  store.recordHindiAccept(key, 'देखिए');
+  store.recordHindiAccept(key, 'देखिए');
+  const result = lookupHindiCorrection('देखिये', store.getHindiCorrectionBias());
+  assert.equal(result?.replacement, 'देखिए');
+});
+
+test('phase 3: isOneEditAway covers insertion, deletion, substitution', () => {
+  assert.equal(lib.isOneEditAway('नही', 'नहीं'), true);      // insertion
+  assert.equal(lib.isOneEditAway('नहीं', 'नही'), true);      // deletion
+  assert.equal(lib.isOneEditAway('विवेचणा', 'विवेचना'), true); // substitution
+  assert.equal(lib.isOneEditAway('क्योकि', 'क्योंकि'), true);   // mid-word insertion
+  assert.equal(lib.isOneEditAway('गाडि', 'गाडी'), true);
+  assert.equal(lib.isOneEditAway('राम', 'श्याम'), false);    // two edits
+  assert.equal(lib.isOneEditAway('सम', 'सम'), false);        // identical is not a correction
+  assert.equal(lib.isOneEditAway('कर', 'कर्मचारी'), false);  // length gap > 1
+});
+
+test('phase 3: corpus suggests the more frequent near-match, never silently', () => {
+  const corpus = [
+    { word: 'विवेचना', count: 9 },
+    { word: 'प्रार्थी', count: 4 },
+  ];
+  const result = lib.suggestHindiFromCorpus('विवेचणा', corpus);
+  assert.ok(result, 'corpus suggestion should fire');
+  assert.equal(result.level, 'suggested', 'fuzzy corrections are always confirmed, never silent');
+  assert.equal(result.replacement, 'विवेचना');
+  // No near match -> nothing.
+  assert.equal(lib.suggestHindiFromCorpus('अज्ञातशब्द', corpus), null);
+  // The typed word being MORE frequent than the candidate -> nothing.
+  assert.equal(
+    lib.suggestHindiFromCorpus('विवेचणा', [{ word: 'विवेचना', count: 9 }, { word: 'विवेचणा', count: 12 }]),
+    null,
+  );
+});
+
+test('phase 3: corpus guards block noise', () => {
+  const corpus = [{ word: 'गवाही', count: 7 }];
+  // Too short (below minLength 4).
+  assert.equal(lib.suggestHindiFromCorpus('गवा', corpus), null);
+  // Non-Devanagari.
+  assert.equal(lib.suggestHindiFromCorpus('gawah', corpus), null);
+  // Candidate below the minimum corpus count.
+  assert.equal(lib.suggestHindiFromCorpus('गवाहि', [{ word: 'गवाही', count: 1 }]), null);
+  // Same frequency as the typed word -> not a confident correction.
+  assert.equal(
+    lib.suggestHindiFromCorpus('गवाहि', [{ word: 'गवाही', count: 2 }, { word: 'गवाहि', count: 2 }]),
+    null,
+  );
+  // Best (most frequent) candidate wins.
+  const best = lib.suggestHindiFromCorpus('तलासि', [
+    { word: 'तलाशि', count: 2 },
+    { word: 'तलासी', count: 9 },
+  ]);
+  assert.equal(best?.replacement, 'तलासी');
 });

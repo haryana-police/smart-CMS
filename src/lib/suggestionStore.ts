@@ -31,6 +31,13 @@ const MAX_PHRASES = 200;
 const MAX_OUTBOX = 200;
 const FLUSH_DELAY_MS = 4000;
 const MAX_MODEL_WORDS = 4000;
+const MAX_HINDI_PERSONAL = 200;
+const MAX_HINDI_SUPPRESSED = 500;
+const MAX_HARVESTED_COUNTS = 3000;
+/** Times a suggested Hindi correction must be accepted to become silent. */
+const HINDI_PROMOTE_AFTER = 2;
+/** Times it must be rejected (with no accept) to stop being offered. */
+const HINDI_SUPPRESS_AFTER = 2;
 
 export type SuggestionEventKind = "accept" | "reject" | "dismiss" | "save" | "remove";
 
@@ -61,6 +68,12 @@ interface Persisted {
   phrases: PhraseEntry[];
   harvestedWords?: string[];
   harvestedPhrases?: string[];
+  /** Document frequency of harvested words (Phase 3 corpus suggestions). */
+  harvestedWordCounts?: Record<string, number>;
+  /** Hindi auto-correct: corrections the officer accepted HINDI_PROMOTE_AFTER times. */
+  hindiPersonal?: Record<string, string>;
+  /** Hindi auto-correct: corrections the officer rejected HINDI_SUPPRESS_AFTER times. */
+  hindiSuppressed?: Record<string, boolean>;
   outbox: OutboxEntry[];
 }
 
@@ -78,6 +91,9 @@ const emptyPersisted = (): Persisted => ({
   phrases: [],
   harvestedWords: [],
   harvestedPhrases: [],
+  harvestedWordCounts: {},
+  hindiPersonal: {},
+  hindiSuppressed: {},
   outbox: [],
 });
 
@@ -97,6 +113,16 @@ function loadPersisted(): Persisted {
       phrases: Array.isArray(parsed.phrases) ? parsed.phrases : [],
       harvestedWords: Array.isArray(parsed.harvestedWords) ? parsed.harvestedWords : [],
       harvestedPhrases: Array.isArray(parsed.harvestedPhrases) ? parsed.harvestedPhrases : [],
+      harvestedWordCounts:
+        parsed.harvestedWordCounts && typeof parsed.harvestedWordCounts === "object"
+          ? parsed.harvestedWordCounts
+          : {},
+      hindiPersonal:
+        parsed.hindiPersonal && typeof parsed.hindiPersonal === "object" ? parsed.hindiPersonal : {},
+      hindiSuppressed:
+        parsed.hindiSuppressed && typeof parsed.hindiSuppressed === "object"
+          ? parsed.hindiSuppressed
+          : {},
       outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     };
   } catch {
@@ -223,11 +249,17 @@ export const suggestionStore = {
   /**
    * Imports vocabulary words & multi-word phrases extracted from uploaded documents
    * and case records into the persistent local suggestion dictionary.
+   * `counts` (document frequency per word) powers the Hindi corpus suggestions.
    */
-  importHarvestedVocabulary(words: string[] = [], phrases: string[] = []): void {
+  importHarvestedVocabulary(
+    words: string[] = [],
+    phrases: string[] = [],
+    counts: Record<string, number> = {}
+  ): void {
     if (!isBrowser()) return;
     const existingWords = new Set(persisted.harvestedWords || []);
     const existingPhrases = new Set(persisted.harvestedPhrases || []);
+    const existingCounts = { ...(persisted.harvestedWordCounts || {}) };
 
     let changed = false;
     for (const w of words) {
@@ -246,9 +278,23 @@ export const suggestionStore = {
       }
     }
 
+    for (const [word, count] of Object.entries(counts)) {
+      const clean = word.trim();
+      const n = Math.floor(count);
+      if (clean && n > 0 && existingCounts[clean] !== n) {
+        existingCounts[clean] = n;
+        changed = true;
+      }
+    }
+
     if (changed) {
       persisted.harvestedWords = Array.from(existingWords).slice(0, 3000);
       persisted.harvestedPhrases = Array.from(existingPhrases).slice(0, 1000);
+      const countEntries = Object.entries(existingCounts)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_HARVESTED_COUNTS);
+      persisted.harvestedWordCounts = Object.fromEntries(countEntries);
       savePersisted();
       notify();
     }
@@ -265,12 +311,90 @@ export const suggestionStore = {
       if (res.ok) {
         const data = await res.json();
         if (data.success && (data.words || data.phrases)) {
-          suggestionStore.importHarvestedVocabulary(data.words || [], data.phrases || []);
+          suggestionStore.importHarvestedVocabulary(
+            data.words || [],
+            data.phrases || [],
+            data.counts || {}
+          );
         }
       }
     } catch {
       // offline: continue with cached harvested vocabulary
     }
+  },
+
+  /**
+   * Hindi auto-correct learning (Phase 2): an accepted suggestion raises the
+   * `hi:<normalized-word>` telemetry key; after HINDI_PROMOTE_AFTER accepts it
+   * is promoted to a personal SILENT correction for this officer.
+   */
+  recordHindiAccept(normalizedWrong: string, replacement: string): void {
+    if (!normalizedWrong || !replacement) return;
+    const t = persisted.telemetry[`hi:${normalizedWrong}`] ?? { a: 0, r: 0 };
+    t.a += 1;
+    persisted.telemetry[`hi:${normalizedWrong}`] = t;
+    trimTelemetry();
+    if (t.a >= HINDI_PROMOTE_AFTER) {
+      persisted.hindiPersonal = persisted.hindiPersonal ?? {};
+      persisted.hindiPersonal[normalizedWrong] = replacement;
+      const keys = Object.keys(persisted.hindiPersonal);
+      if (keys.length > MAX_HINDI_PERSONAL) {
+        for (const k of keys.slice(0, keys.length - MAX_HINDI_PERSONAL)) {
+          delete persisted.hindiPersonal[k];
+        }
+      }
+      // A promoted word is no longer suppressed.
+      if (persisted.hindiSuppressed) delete persisted.hindiSuppressed[normalizedWrong];
+    }
+    pushOutbox("accept", `hi:${normalizedWrong}`, "hindi-autocorrect");
+    savePersisted();
+    notify();
+  },
+
+  /**
+   * Hindi auto-correct learning (Phase 2): an explicitly rejected suggestion
+   * lowers the key; after HINDI_SUPPRESS_AFTER rejects (with no accept) the
+   * correction stops being offered for this officer.
+   */
+  recordHindiReject(normalizedWrong: string): void {
+    if (!normalizedWrong) return;
+    const t = persisted.telemetry[`hi:${normalizedWrong}`] ?? { a: 0, r: 0 };
+    t.r += 1;
+    persisted.telemetry[`hi:${normalizedWrong}`] = t;
+    trimTelemetry();
+    if (t.r >= HINDI_SUPPRESS_AFTER && t.a === 0) {
+      persisted.hindiSuppressed = persisted.hindiSuppressed ?? {};
+      persisted.hindiSuppressed[normalizedWrong] = true;
+      const keys = Object.keys(persisted.hindiSuppressed);
+      if (keys.length > MAX_HINDI_SUPPRESSED) {
+        for (const k of keys.slice(0, keys.length - MAX_HINDI_SUPPRESSED)) {
+          delete persisted.hindiSuppressed[k];
+        }
+      }
+    }
+    pushOutbox("reject", `hi:${normalizedWrong}`, "hindi-autocorrect");
+    savePersisted();
+    notify();
+  },
+
+  /**
+   * Snapshot of the Hindi learning state + corpus, consumed by
+   * useHindiReportAutocorrect on every word completion.
+   */
+  getHindiCorrectionBias(): {
+    promoted: Record<string, string>;
+    suppressed: Record<string, boolean>;
+    corpus: { word: string; count: number }[];
+  } {
+    const corpus = Object.entries(persisted.harvestedWordCounts || {})
+      .map(([word, count]) => ({ word, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 1500);
+    return {
+      promoted: { ...(persisted.hindiPersonal || {}) },
+      suppressed: { ...(persisted.hindiSuppressed || {}) },
+      corpus,
+    };
   },
 
   /**

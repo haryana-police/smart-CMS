@@ -54,7 +54,7 @@ import {
   HelpCircle,
   FileType,
 } from "lucide-react";
-import { HindiSuggestionButton, VerbatimSelectionButton } from "@/components/editor/VerbatimSelectionButton";
+import { HindiSuggestionChip, VerbatimSelectionButton } from "@/components/editor/VerbatimSelectionButton";
 import { useHindiReportAutocorrect } from "@/hooks/useHindiAutocorrect";
 import { useAuth } from "@/context/AuthContext";
 import { formatDate } from "@/lib/utils";
@@ -1301,7 +1301,13 @@ function TemplateDraftBuilderContent() {
               handleContentChange();
             }} />
             {hindiAutocorrect.suggestion && (
-              <HindiSuggestionButton word={hindiAutocorrect.suggestion} onAccept={hindiAutocorrect.acceptSuggestion} />
+              <HindiSuggestionChip
+                word={hindiAutocorrect.suggestion.replacement}
+                wrong={hindiAutocorrect.suggestion.word}
+                position={hindiAutocorrect.suggestion.rect}
+                onAccept={hindiAutocorrect.acceptSuggestion}
+                onReject={hindiAutocorrect.rejectSuggestion}
+              />
             )}
 
             {/* Undo / Redo */}
