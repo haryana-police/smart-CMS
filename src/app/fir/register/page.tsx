@@ -5153,6 +5153,35 @@ function RegisterFIRForm({ onReset }: { onReset: () => void }) {
                       <label className="font-bold text-blue-900 block text-xs">
                         Select Investigating Officer (IO)
                       </label>
+                      {/* FIR-03 fix: empty-station-roster guidance. Without this the
+                          Register FIR button stays disabled with no visible reason. */}
+                      {!ioRosterLoading && !ioRosterError && ioRoster.length === 0 && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 animate-in fade-in-30">
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                          <div className="text-xs leading-relaxed">
+                            <p className="font-bold">No eligible investigating officer in this station&apos;s roster.</p>
+                            <p className="mt-0.5">
+                              Registration cannot proceed with &quot;Investigation/Assign IO&quot; until an eligible officer is seeded in the
+                              roster. Choose{" "}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActionType("Self Investigation");
+                                  setErrors((prev) => {
+                                    const next = { ...prev };
+                                    delete next.assignedIoId;
+                                    return next;
+                                  });
+                                }}
+                                className="underline font-bold hover:text-amber-950"
+                              >
+                                &quot;Self Investigation&quot;
+                              </button>{" "}
+                              to register the FIR under your own supervision.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <select
@@ -5828,7 +5857,10 @@ function RegisterFIRForm({ onReset }: { onReset: () => void }) {
           )}
 
         {/* BOTTOM NAVIGATION FOOTER */}
-        <div className="sticky bottom-0 z-20 bg-white/95 backdrop-blur-xs border-t border-slate-200 p-3.5 rounded-xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* FIR-01 fix: float the action bar above the 60px mobile bottom nav
+            (fixed bottom-0 z-40 in MobileBottomNav) so Previous/Next/Save/Register
+            are never painted over; desktop keeps the original bottom-0 position. */}
+        <div className="sticky bottom-15 z-20 lg:bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-200 p-3.5 rounded-xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Step Indicator on Left */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500">

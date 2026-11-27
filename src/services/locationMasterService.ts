@@ -1,4 +1,4 @@
-﻿import { readRuntimeJson, usesPostgresStore, writeRuntimeJson } from "@/lib/runtimeJsonStore";
+import { readRuntimeJson, usesPostgresStore, writeRuntimeJson } from "@/lib/runtimeJsonStore";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import fs from 'node:fs/promises';
@@ -1294,7 +1294,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
     code: 'HR-POLICE',
     type: 'STATE',
     status: 'ACTIVE',
-    details: 'Director General of Police, Haryana â€¢ State HQ: Sector 6, Panchkula',
+    details: 'Director General of Police, Haryana • State HQ: Sector 6, Panchkula',
     children: [],
   };
 
@@ -1318,7 +1318,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: off.code,
         type: 'OFFICE' as const,
         status: off.status,
-        details: `${off.officeType} â€¢ Head: ${off.officeHead} â€¢ ${off.physicalAddress}`,
+        details: `${off.officeType} • Head: ${off.officeHead} • ${off.physicalAddress}`,
       })),
       // Official PHQ Directorates
       {
@@ -1382,7 +1382,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: off.code,
         type: 'OFFICE',
         status: off.status,
-        details: `${off.officeType} â€¢ Head: ${off.officeHead}`,
+        details: `${off.officeType} • Head: ${off.officeHead}`,
       }));
 
     const dstStations: HierarchyTreeNode[] = store.policeStations
@@ -1393,7 +1393,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: ps.code,
         type: 'POLICE_STATION',
         status: ps.status,
-        details: `${ps.stationType} Station â€¢ Sub-Div: ${ps.subDivision || 'N/A'} â€¢ Contact: ${ps.contactPhone}`,
+        details: `${ps.stationType} Station • Sub-Div: ${ps.subDivision || 'N/A'} • Contact: ${ps.contactPhone}`,
       }));
 
     const dstUnits: HierarchyTreeNode[] = store.specializedUnits
@@ -1404,7 +1404,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: unt.code,
         type: 'UNIT',
         status: unt.status,
-        details: `${unt.unitType} â€¢ Head: ${unt.unitHead} â€¢ Loc: ${unt.physicalLocation}`,
+        details: `${unt.unitType} • Head: ${unt.unitHead} • Loc: ${unt.physicalLocation}`,
       }));
 
     return {
@@ -1413,7 +1413,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
       code: dst.code,
       type: 'DISTRICT',
       status: dst.status,
-      details: `HQ: ${dst.districtHeadquarters} â€¢ SP Office: ${dst.spOffice}`,
+      details: `HQ: ${dst.districtHeadquarters} • SP Office: ${dst.spOffice}`,
       children: [...dstOffices, ...dstStations, ...dstUnits],
     };
   };
@@ -1450,7 +1450,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1468,7 +1468,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1505,7 +1505,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1523,7 +1523,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1541,7 +1541,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1559,7 +1559,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
         ],
@@ -1615,7 +1615,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1652,7 +1652,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
                 code: ps.code,
                 type: 'POLICE_STATION',
                 status: ps.status,
-                details: `${ps.stationType} Station â€¢ Contact: ${ps.contactPhone}`,
+                details: `${ps.stationType} Station • Contact: ${ps.contactPhone}`,
               })),
           },
           {
@@ -1693,7 +1693,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: 'RNG-AMB',
         type: 'RANGE',
         status: 'ACTIVE',
-        details: 'HQ: Ambala â€¢ Dist: Ambala, Yamunanagar, Kurukshetra',
+        details: 'HQ: Ambala • Dist: Ambala, Yamunanagar, Kurukshetra',
         children: store.districts
           .filter((d) => d.rangeName?.toLowerCase().includes('ambala') || ['ambala', 'yamunanagar', 'kurukshetra'].includes(d.name.toLowerCase()))
           .map(buildDistrictNode),
@@ -1704,7 +1704,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: 'RNG-HSR',
         type: 'RANGE',
         status: 'ACTIVE',
-        details: 'HQ: Hisar â€¢ Dist: Hisar, Fatehabad, Sirsa, Hansi, Jind',
+        details: 'HQ: Hisar • Dist: Hisar, Fatehabad, Sirsa, Hansi, Jind',
         children: store.districts
           .filter((d) => d.rangeName?.toLowerCase().includes('hisar') || ['hisar', 'fatehabad', 'sirsa', 'hansi', 'jind'].includes(d.name.toLowerCase()))
           .map(buildDistrictNode),
@@ -1715,7 +1715,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: 'RNG-KNL',
         type: 'RANGE',
         status: 'ACTIVE',
-        details: 'HQ: Karnal â€¢ Dist: Karnal, Panipat, Kaithal',
+        details: 'HQ: Karnal • Dist: Karnal, Panipat, Kaithal',
         children: store.districts
           .filter((d) => d.rangeName?.toLowerCase().includes('karnal') || ['karnal', 'panipat', 'kaithal'].includes(d.name.toLowerCase()))
           .map(buildDistrictNode),
@@ -1726,7 +1726,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: 'RNG-ROH',
         type: 'RANGE',
         status: 'ACTIVE',
-        details: 'HQ: Rohtak â€¢ Dist: Rohtak, Bhiwani, Charkhi Dadri',
+        details: 'HQ: Rohtak • Dist: Rohtak, Bhiwani, Charkhi Dadri',
         children: store.districts
           .filter((d) => d.rangeName?.toLowerCase().includes('rohtak') || ['rohtak', 'bhiwani', 'charkhi dadri'].includes(d.name.toLowerCase()))
           .map(buildDistrictNode),
@@ -1737,7 +1737,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: 'RNG-STH',
         type: 'RANGE',
         status: 'ACTIVE',
-        details: 'HQ: Rewari â€¢ Dist: Rewari, Mahendragarh, Palwal, Nuh',
+        details: 'HQ: Rewari • Dist: Rewari, Mahendragarh, Palwal, Nuh',
         children: store.districts
           .filter((d) => d.rangeName?.toLowerCase().includes('south') || ['rewari', 'mahendragarh', 'palwal', 'nuh'].includes(d.name.toLowerCase()))
           .map(buildDistrictNode),
@@ -1777,7 +1777,7 @@ export async function getOrganizationHierarchy(): Promise<HierarchyTreeNode[]> {
         code: 'IGP-RLY-CMD',
         type: 'OFFICE',
         status: 'ACTIVE',
-        details: 'Supervisory Command â€¢ Railway Tracks, Stations & Commando Force',
+        details: 'Supervisory Command • Railway Tracks, Stations & Commando Force',
         children: [
           {
             id: 'off_grp_hq',

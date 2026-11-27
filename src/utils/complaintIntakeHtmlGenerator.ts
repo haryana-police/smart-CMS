@@ -1,6 +1,7 @@
 // Document generator for complaint intake verification proforma
 import { ComplaintPreviewData } from "@/components/complaints/ComplaintVerificationModal";
 import { escapeHtml } from "@/lib/utils";
+import { relativePrefix } from "@/lib/complaintRelation";
 
 export function generateComplaintIntakeHtml(data: ComplaintPreviewData, complaintNo: string): string {
   const e = escapeHtml;
@@ -23,7 +24,7 @@ export function generateComplaintIntakeHtml(data: ComplaintPreviewData, complain
       (c, idx) => `
     <div style="margin-bottom: 12px; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px;">
       <div style="font-weight: bold; font-size: 13px; color: #0f172a;">
-        #${idx + 1} ${e(c.name)} ${c.relativeName ? `(${e(c.relationType || "S/o")} ${e(c.relativeName)})` : ""}
+        #${idx + 1} ${e(c.name)} ${c.relativeName ? `(${e([relativePrefix(c.relationType, c.gender), c.relativeName.trim()].filter(Boolean).join(" "))})` : ""}
         <span style="float: right; font-family: monospace; color: #1e3a8a; background: #dbeafe; padding: 2px 6px; border-radius: 4px;">
           Mob: +91 ${e(c.mobile)}
         </span>

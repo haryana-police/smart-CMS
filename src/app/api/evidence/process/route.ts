@@ -18,6 +18,33 @@ function computeSha256(buffer: Buffer | string): string {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+/**
+ * Decode a data URL payload into bytes.
+ * - `;base64` payloads are base64-decoded.
+ * - Percent-encoded payloads — e.g. the complaint docket built client-side as
+ *   `data:text/html;charset=utf-8,${encodeURIComponent(html)}` — are decoded
+ *   with decodeURIComponent. Decoding them as base64 silently produced
+ *   arbitrary binary garbage (including NUL bytes), which then crashed the
+ *   PostgreSQL jsonb write with error 22P05.
+ * - A payload made only of base64 characters (without the `;base64` marker) is
+ *   still treated as base64 for legacy callers; anything else is raw text.
+ */
+function decodeDataUrlPayload(dataUrl: string): Buffer {
+  const commaIndex = dataUrl.indexOf(",");
+  const meta = commaIndex === -1 ? "" : dataUrl.slice(0, commaIndex);
+  const payload = commaIndex === -1 ? dataUrl : dataUrl.slice(commaIndex + 1);
+  if (/;[ \t]*base64/i.test(meta)) return Buffer.from(payload, "base64");
+  if (payload.includes("%")) {
+    try {
+      return Buffer.from(decodeURIComponent(payload), "utf-8");
+    } catch {
+      return Buffer.from(payload, "utf-8");
+    }
+  }
+  if (!/^[A-Za-z0-9+/=\s]*$/.test(payload)) return Buffer.from(payload, "utf-8");
+  return Buffer.from(payload, "base64");
+}
+
 function extractLocalDocumentText(buffer: Buffer | null, fileType: string, fileName: string): string {
   if (!buffer || buffer.length === 0) return "";
   const lower = `${fileType} ${fileName}`.toLowerCase();
@@ -106,7 +133,7 @@ export async function POST(req: NextRequest) {
       fileBuffer = Buffer.from(arrayBuffer);
       sha256Hash = computeSha256(fileBuffer);
     } else if (effectiveDataUrl) {
-      fileBuffer = Buffer.from(effectiveDataUrl.split(",")[1] || "", "base64");
+      fileBuffer = decodeDataUrlPayload(effectiveDataUrl);
       sha256Hash = computeSha256(fileBuffer);
     } else {
       sha256Hash = computeSha256(fallbackText);
@@ -363,7 +390,7 @@ Return a valid JSON object matching:
       try {
         const rawBuf =
           fileBuffer ||
-          (dataUrl.includes(",") ? Buffer.from(dataUrl.split(",")[1], "base64") : null);
+          (dataUrl.includes(",") ? decodeDataUrlPayload(dataUrl) : null);
         if (rawBuf) {
           const compResult = await losslessCompressionService.compressAndVerify(
             rawBuf,

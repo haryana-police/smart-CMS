@@ -5,6 +5,15 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Full-screen overlays (modal backdrops, drawers) must always paint above the
+   floating PARTH assistant button: the FAB renders after {children} in the
+   shell DOM at the same z-50 level, so an equal z-index let it cover modal
+   text (audit finding SHARED-03). Raising every full-screen fixed overlay
+   above the FAB fixes all dialogs app-wide without touching each one. */
+.fixed.inset-0.z-50 {
+  z-index: 60;
+}
+
 html.cms-theme-switching *,
 html.cms-theme-switching *::before,
 html.cms-theme-switching *::after {

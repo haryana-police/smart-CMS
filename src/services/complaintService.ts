@@ -235,7 +235,11 @@ export const ComplaintService = {
     }));
 
     const viewer=currentComplaintUser();
-    if(typeof window!=='undefined')list=list.filter(c=>viewer&&canViewComplaint(viewer,c).allowed);
+    // The client store is hydrated exclusively from the server API, which already
+    // scopes every record to the signed-in session user. The legacy persona lookup
+    // was removed with the demo accounts; an undefined viewer must NOT wipe the
+    // register for every role — only filter when an explicit client viewer exists.
+    if(typeof window!=='undefined'&&viewer)list=list.filter(c=>canViewComplaint(viewer,c).allowed);
 
     // 0. Station-level isolation:
     // SHO, MHC, and IO/EO see ONLY complaints of their police station.
@@ -489,7 +493,7 @@ export const ComplaintService = {
         c.complaintNumber.toLowerCase() === cleanId
     );
     if (found) {
-      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(!viewer||!canViewComplaint(viewer,found).allowed)return undefined;}
+      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(viewer&&!canViewComplaint(viewer,found).allowed)return undefined;}
       found.daysPending = computeDaysPending(found);
       return found;
     }
@@ -502,7 +506,7 @@ export const ComplaintService = {
         c.complaintNumber.toLowerCase() === cleanId
     );
     if (found) {
-      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(!viewer||!canViewComplaint(viewer,found).allowed)return undefined;}
+      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(viewer&&!canViewComplaint(viewer,found).allowed)return undefined;}
       found.daysPending = computeDaysPending(found);
     }
     return found;
@@ -520,7 +524,7 @@ export const ComplaintService = {
         c.complaintNumber.toLowerCase() === cleanId
     );
     if (found) {
-      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(!viewer||!canViewComplaint(viewer,found).allowed)return undefined;}
+      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(viewer&&!canViewComplaint(viewer,found).allowed)return undefined;}
       found.daysPending = computeDaysPending(found);
       return found;
     }
@@ -531,7 +535,7 @@ export const ComplaintService = {
         c.complaintNumber.toLowerCase() === cleanId
     );
     if (found) {
-      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(!viewer||!canViewComplaint(viewer,found).allowed)return undefined;}
+      if(typeof window!=='undefined'){const viewer=currentComplaintUser();if(viewer&&!canViewComplaint(viewer,found).allowed)return undefined;}
       found.daysPending = computeDaysPending(found);
     }
     return found;
@@ -562,7 +566,9 @@ export const ComplaintService = {
     if(!mutationDepth)await hydrateComplaints();
     complaintsStore = loadComplaintsFromStorage();
     const viewer=currentComplaintUser();
-    let baseList = complaintsStore.filter(c=>typeof window==='undefined'||(viewer&&canViewComplaint(viewer,c).allowed));
+    // Server-hydrated store is already role-scoped; an undefined client viewer
+    // (persona lookup removed) must not wipe status counts to zero.
+    let baseList = complaintsStore.filter(c=>typeof window==='undefined'||!viewer||canViewComplaint(viewer,c).allowed);
 
     const isSuperior =
       viewerRole === "DSP_SUBDIV" ||

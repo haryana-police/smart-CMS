@@ -168,21 +168,31 @@ export const evidenceBlobStore = {
     if (dataUrl.startsWith("blob:") || dataUrl.startsWith("http")) return dataUrl;
 
     try {
-      const parts = dataUrl.split(",");
-      if (parts.length !== 2) return dataUrl;
+      const commaIndex = dataUrl.indexOf(",");
+      if (commaIndex === -1) return dataUrl;
 
-      const header = parts[0];
-      const base64 = parts[1];
+      const header = dataUrl.slice(0, commaIndex);
+      const payload = dataUrl.slice(commaIndex + 1);
       const mimeMatch = header.match(/:(.*?);/);
       const mimeType = mimeMatch ? mimeMatch[1] : "application/pdf";
 
-      const byteCharacters = atob(base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      // Percent-encoded (URL-encoded) payloads — e.g. the registered complaint
+      // docket `data:text/html;charset=utf-8,${encodeURIComponent(html)}` — are
+      // NOT base64: atob() on them throws and silently degrades the preview.
+      let bytes: Uint8Array<ArrayBuffer>;
+      if (/;[ \t]*base64/i.test(header)) {
+        const byteCharacters = atob(payload);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        bytes = new Uint8Array(byteNumbers);
+      } else if (payload.includes("%")) {
+        bytes = new TextEncoder().encode(decodeURIComponent(payload));
+      } else {
+        bytes = new TextEncoder().encode(payload);
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: mimeType });
+      const blob = new Blob([bytes], { type: mimeType });
       return URL.createObjectURL(blob);
     } catch (e) {
       console.warn("Could not create Blob URL from dataUrl:", e);

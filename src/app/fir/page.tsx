@@ -63,6 +63,7 @@ import { LawSectionTooltip } from "@/components/common/LawSectionTooltip";
 
 type FIRSortField =
   | "firNumber"
+  | "policeStation"
   | "firDate"
   | "complainantName"
   | "actsAndSections"
@@ -142,6 +143,7 @@ function FIRRegisterPageContent() {
 
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
     firNumber: true,
+    policeStation: true,
     dateTime: true,
     complainant: true,
     actsPlace: true,
@@ -155,6 +157,7 @@ function FIRRegisterPageContent() {
   type FIRColKey = string;
   const DEFAULT_FIR_COLUMN_ORDER: FIRColKey[] = [
     "firNumber",
+    "policeStation",
     "dateTime",
     "complainant",
     "actsPlace",
@@ -165,6 +168,7 @@ function FIRRegisterPageContent() {
 
   const FIR_COL_TO_SORT_FIELD: Record<string, FIRSortField> = {
     firNumber: "firNumber",
+    policeStation: "policeStation",
     dateTime: "firDate",
     complainant: "complainantName",
     actsPlace: "actsAndSections",
@@ -175,6 +179,7 @@ function FIRRegisterPageContent() {
 
   const FIR_COL_LABELS: Record<string, string> = {
     firNumber: "FIR No. & Reference",
+    policeStation: "Police Station",
     dateTime: "Date & Time",
     complainant: "Complainant / Informant",
     actsPlace: "Acts, Sections & Place",
@@ -494,6 +499,11 @@ function FIRRegisterPageContent() {
             formatted.includes(q) ||
             (fir.firTime?.includes(q) ?? false);
           if (!match) return false;
+        } else if (col === "policeStation") {
+          const match =
+            fir.policeStation?.toLowerCase().includes(q) ||
+            (fir.district?.toLowerCase().includes(q) ?? false);
+          if (!match) return false;
         } else if (col === "complainantName") {
           const match =
             fir.complainantName.toLowerCase().includes(q) ||
@@ -766,6 +776,19 @@ function FIRRegisterPageContent() {
           </td>
         );
 
+      case "policeStation":
+        return (
+          <td key="policeStation" className="py-2.5 px-2.5 align-top">
+            <div className="text-xs font-semibold text-slate-800 leading-tight">
+              {fir.policeStation || "—"}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              {fir.district || ""}
+              {fir.state ? `, ${fir.state}` : ""}
+            </div>
+          </td>
+        );
+
       case "dateTime":
         return (
           <td key="dateTime" className="py-2.5 px-2.5 align-top whitespace-nowrap">
@@ -783,7 +806,10 @@ function FIRRegisterPageContent() {
             <div className="font-bold text-slate-900">{fir.complainantName}</div>
             {fir.complainantFatherSpouse && (
               <div className="text-[10px] text-slate-500">
-                S/o {fir.complainantFatherSpouse}
+                {/* CMP-05 fix: the stored value already carries its own marker
+                    ("W/o …" / "Sh. …") — printing a hardcoded S/o before it
+                    produced "S/o W/o …" for female complainants. */}
+                {fir.complainantFatherSpouse}
               </div>
             )}
             <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
@@ -1260,19 +1286,21 @@ function FIRRegisterPageContent() {
                   const widthClass =
                     customCols.filter((c) => c.isActive).length === 0
                       ? col === "firNumber"
-                        ? "lg:w-[13%]"
+                        ? "lg:w-[12%]"
+                        : col === "policeStation"
+                        ? "lg:w-[12%]"
                         : col === "dateTime"
-                        ? "lg:w-[11%]"
+                        ? "lg:w-[10%]"
                         : col === "complainant"
-                        ? "lg:w-[15%]"
+                        ? "lg:w-[13%]"
                         : col === "actsPlace"
-                        ? "lg:w-[20%]"
+                        ? "lg:w-[17%]"
                         : col === "status"
-                        ? "lg:w-[13%]"
+                        ? "lg:w-[11%]"
                         : col === "assignedIo"
-                        ? "lg:w-[13%]"
+                        ? "lg:w-[11%]"
                         : col === "daysPending"
-                        ? "lg:w-[7%]"
+                        ? "lg:w-[6%]"
                         : ""
                       : "";
 

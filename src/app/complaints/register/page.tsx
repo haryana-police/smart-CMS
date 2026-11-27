@@ -2,7 +2,7 @@
 
 import { isMhcOrMmRole } from "@/lib/officerRoles";
 import { recordedCalendarDate } from "@/lib/dataIntegrity";
-import { complaintRelationFromSource } from "@/lib/complaintRelation";
+import { complaintRelationFromSource, relativePrefix } from "@/lib/complaintRelation";
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -2192,6 +2192,13 @@ export default function RegisterComplaintPage() {
       errors["firNumber"] = "FIR number is required when FIR registered is Yes";
     }
 
+    // CMP-06 fix: the 5-P Complaint/Diary Number field is marked required (*) for
+    // SP-office / 5-P branch intake but was never validated, so a submission
+    // could pass without the mandatory reference number.
+    if ((intakeMode === "SP_OFFICE_REFERENCE" || intakeMode === "FIVE_P_BRANCH") && !fivePNumber.trim()) {
+      errors["fivePNumber"] = "5-P Complaint / Diary Number is required for this intake mode";
+    }
+
     setValidationErrors(errors);
 
     return Object.keys(errors).length === 0;
@@ -2555,48 +2562,19 @@ export default function RegisterComplaintPage() {
         setShowReceiptModal(true);
       }
 
-      // Preserve submitted complaint snapshot in persistent backup draft before clearing active session
+      // A complaint was successfully registered: clear every draft/backup key so the
+      // next visit to this page starts with a blank form instead of silently
+      // pre-filling the citizen who was just submitted (data-leakage fix CMP-03).
       try {
         if (typeof window !== "undefined") {
-          const snapshot = {
-            sourceChannel,
-            priorityLevel,
-            complainants,
-            isAccusedKnown,
-            accusedList,
-            incidentPlace,
-            incidentLandmark,
-            isDateTimeKnown,
-            incidentDate,
-            incidentTime,
-            incidentApproxPeriod,
-            incidentCategory,
-            incidentDetails,
-            attachments: attachments.map((a: any) => ({ ...a, dataUrl: undefined })),
-            intakeMode,
-            complaintSubject,
-            complaintDescription,
-            isFirRegistered,
-            firNumber,
-            firDate,
-            complaintAgeType,
-            complaintClassification,
-            complaintPurpose,
-            selectedEoId,
-            shouldAssignEoNow,
-            directionTemplate,
-            assignedDirections,
-            targetDays,
-            linkedComplaintNo,
-            isCrossCaseTagged,
-            savedAt: new Date().toLocaleTimeString("en-IN"),
-          };
-          window.localStorage.setItem(FORM_LAST_SUBMITTED_KEY, JSON.stringify(snapshot));
-          window.localStorage.setItem(FORM_LAST_DRAFT_BACKUP_KEY, JSON.stringify(snapshot));
           window.localStorage.removeItem(FORM_DRAFT_KEY);
+          window.localStorage.removeItem(FORM_LAST_DRAFT_BACKUP_KEY);
+          window.localStorage.removeItem(FORM_MANUAL_DRAFT_KEY);
+          window.localStorage.removeItem(FORM_LAST_SUBMITTED_KEY);
         }
-        setHasStoredDraft(true);
       } catch {}
+      setHasStoredDraft(false);
+      setDraftSavedAt(null);
     } catch (err: any) {
       setValidationErrors({ submit: err.message || "Failed to register complaint." });
     } finally {
@@ -2705,8 +2683,7 @@ export default function RegisterComplaintPage() {
                     {createdComplaint.complainantFatherSpouse && (
                       <span className="text-slate-600 font-normal">
                         {" "}
-                        ({createdComplaint.complainantRelationType || "S/O"}{" "}
-                        {createdComplaint.complainantFatherSpouse})
+                        ({[relativePrefix(createdComplaint.complainantRelationType, createdComplaint.complainantGender), createdComplaint.complainantFatherSpouse].filter(Boolean).join(" ")})
                       </span>
                     )}
                   </p>
@@ -4347,10 +4324,22 @@ export default function RegisterComplaintPage() {
                       <input
                         type="text"
                         value={fivePNumber}
-                        onChange={(e) => setFivePNumber(e.target.value)}
+                        onChange={(e) => {
+                          setFivePNumber(e.target.value);
+                          if (validationErrors["fivePNumber"]) {
+                            setValidationErrors((prev) => {
+                              const next = { ...prev };
+                              delete next.fivePNumber;
+                              return next;
+                            });
+                          }
+                        }}
                         placeholder="e.g. 5-P/2026/0894 or SP-PNP/124"
-                        className="w-full px-2.5 py-1.5 text-xs bg-white border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-600 font-mono font-bold text-purple-950"
+                        className={`w-full px-2.5 py-1.5 text-xs bg-white border rounded-lg focus:ring-2 focus:ring-purple-600 font-mono font-bold text-purple-950 ${validationErrors["fivePNumber"] ? "border-red-500 ring-1 ring-red-400 mandatory-glow-error" : "border-purple-300"}`}
                       />
+                      {validationErrors["fivePNumber"] && (
+                        <p role="alert" className="text-red-600 text-[11px] font-semibold mt-1">{validationErrors["fivePNumber"]}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-700 mb-1">

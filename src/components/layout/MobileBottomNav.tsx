@@ -57,7 +57,7 @@ export function MobileBottomNav() {
     { name: "FIR Register", href: "/fir", icon: Scale },
     { name: "Part B", href: "/fir/part-b", icon: FileCheck2 },
     ...(canRegisterFir(currentUser?.role)
-      ? [{ name: "Register", href: "/fir/register", icon: PlusCircle, isPrimaryAction: true }]
+      ? [{ name: "Register FIR", href: "/fir/register", icon: PlusCircle, isPrimaryAction: true }]
       : []),
     { name: "Complete", href: "/fir/complete-cases", icon: CheckCircle2 },
     { name: "Modules", href: "/", icon: LayoutGrid },
@@ -68,7 +68,7 @@ export function MobileBottomNav() {
     { name: "Complaints", href: "/complaints", icon: FileText },
     { name: "Enquiry", href: "/enquiry-workspace", icon: UserCheck },
     ...(canRegisterComplaint
-      ? [{ name: "Register", href: "/complaints/register", icon: PlusCircle, isPrimaryAction: true }]
+      ? [{ name: "Register Complaint", href: "/complaints/register", icon: PlusCircle, isPrimaryAction: true }]
       : []),
     { name: "CM Window", href: "/complaints?priority=CM_WINDOW_VIP", icon: Flame },
     { name: "Modules", href: "/", icon: LayoutGrid },
@@ -85,7 +85,7 @@ export function MobileBottomNav() {
 
   // 4. Navigation items strictly for Registrations Module
   const registrationsItems: MobileNavItem[] = [
-    { name: "Register", href: "/registrations", icon: ClipboardList },
+    { name: "Registers", href: "/registrations", icon: ClipboardList },
     { name: "Missing", href: "/registrations?tab=MISSING_PERSON", icon: UserCheck },
     { name: "New Entry", href: "/registrations", icon: PlusCircle, isPrimaryAction: true },
     { name: "Bare Acts", href: "/acts-sections", icon: Scale },

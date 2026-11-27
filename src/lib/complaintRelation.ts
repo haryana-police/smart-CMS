@@ -9,6 +9,41 @@ export function formatComplaintRelative(
   return [complaint.complainantRelationType, relative].filter(Boolean).join(' ');
 }
 
+/**
+ * CMP-05 fix: never hardcode "S/o" for every complainant. When the stored
+ * relation type is missing, fall back by gender (W/o for female, S/o for male)
+ * and return an empty prefix when the gender is unknown, so a female
+ * complainant is never mislabeled with a father/husband marker of the wrong
+ * kind.
+ */
+export function relativePrefix(
+  relationType?: string | null,
+  gender?: string | null,
+): string {
+  const stored = relationType?.trim();
+  if (stored) return stored;
+  const normalized = (gender || '').trim().toUpperCase();
+  if (normalized === 'FEMALE' || normalized === 'W/O') return 'W/o';
+  if (normalized === 'MALE' || normalized === 'S/O') return 'S/o';
+  return '';
+}
+
+/**
+ * Formats "(W/o Krishan Lal)"-style relation text from a stored relation type,
+ * a relative name and an optional gender fallback. Returns '' when there is no
+ * relative name.
+ */
+export function formatRelativeWithType(
+  relationType?: string | null,
+  relativeName?: string | null,
+  gender?: string | null,
+): string {
+  const relative = relativeName?.trim();
+  if (!relative) return '';
+  const prefix = relativePrefix(relationType, gender);
+  return prefix ? `${prefix} ${relative}` : relative;
+}
+
 export function complaintRelationFromSource(source: string, name: string): { type?: RelativeRelation; relative: string } {
   const subject = name.trim().split(/\s+/).map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
   if (!subject) return { relative: '' };

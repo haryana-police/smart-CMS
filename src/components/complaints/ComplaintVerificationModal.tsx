@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { relativePrefix } from "@/lib/complaintRelation";
 import { printA4Element, downloadA4DocumentAsHtml } from "@/utils/printElement";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 
@@ -244,7 +245,7 @@ export function ComplaintVerificationModal({
                 <div key={idx} className="border border-slate-300 p-3 bg-white text-xs space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-1">
                     <span className="font-bold text-slate-950">
-                      #{idx + 1} {comp.name} {comp.relativeName ? `(${comp.relationType || "S/o"} ${comp.relativeName})` : ""}
+                      #{idx + 1} {comp.name} {comp.relativeName ? `(${[relativePrefix(comp.relationType, comp.gender), comp.relativeName.trim()].filter(Boolean).join(" ")})` : ""}
                     </span>
                     <span className="font-mono font-bold text-slate-900 border border-slate-300 px-1.5 py-0.2">
                       Mob: +91 {comp.mobile}

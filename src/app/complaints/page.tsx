@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { isMhcOrMmRole } from "@/lib/officerRoles";
 import { useLanguage } from "@/context/LanguageContext";
@@ -1154,7 +1154,7 @@ function ComplaintListContent() {
       case "srNo":
         return (
           <td key="srNo" className="py-3 px-2 text-center font-mono text-xs text-slate-500 w-14 max-w-[56px] font-semibold">
-            {typeof index === 'number' ? index + 1 : 'ÔÇö'}
+            {typeof index === 'number' ? index + 1 : '—'}
           </td>
         );
 
@@ -1288,7 +1288,7 @@ function ComplaintListContent() {
                       className="text-xs font-bold text-white bg-[#0b192c] hover:bg-slate-800 px-2.5 py-1 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
                     >
                       <UserCheck className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Assign EO Ôû¥</span>
+                      <span>Assign EO ▾</span>
                     </button>
                     {assignDropdownComplaintId === c.id && (
                       <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white border border-slate-200 rounded-xl shadow-xl py-1 animate-in fade-in-50 text-left">
@@ -1356,7 +1356,7 @@ function ComplaintListContent() {
         return (
           <td key={colKey} className="py-3 px-4 text-xs text-slate-700">
             <span className="font-mono text-xs text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-              {customDef?.defaultValue || "ÔÇö"}
+              {customDef?.defaultValue || "—"}
             </span>
           </td>
         );
@@ -1384,7 +1384,7 @@ function ComplaintListContent() {
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
-            <span>{t("ÓñëÓñ¿ÓÑìÓñ¿Óññ Óñ½Óñ╝Óñ┐Óñ▓ÓÑìÓñƒÓñ░", "Advanced filters")}{(dateFrom || dateTo || categoryFilter !== 'ALL' || (!isAllSelected && selectedStatuses.length > 0) || searchQuery) ? ' ÔÇó' : ''}</span>
+            <span>{t("उन्नत िल्टर", "Advanced filters")}{(dateFrom || dateTo || categoryFilter !== 'ALL' || (!isAllSelected && selectedStatuses.length > 0) || searchQuery) ? ' •' : ''}</span>
             <ChevronDown
               className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
                 advancedFilters ? "rotate-180" : ""
@@ -1495,10 +1495,10 @@ function ComplaintListContent() {
             <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="font-bold text-sm text-amber-950">
-                Complaint #{unassignedComplaintNo} Registered ÔÇö Awaiting EO Assignment
+                Complaint #{unassignedComplaintNo} Registered — Awaiting EO Assignment
               </p>
               <p className="text-amber-800 leading-relaxed">
-                {t("Óñ»Óñ╣ ÓñÂÓñ┐ÓñòÓñ¥Óñ»Óññ ÓñòÓÑçÓñéÓñªÓÑìÓñ░ÓÑÇÓñ» Óñ░Óñ£Óñ┐Óñ©ÓÑìÓñƒÓñ░ Óñ©ÓÑç Óñ©ÓÑÇÓñºÓÑç ÓñÑÓñ¥Óñ¿Óñ¥ Óñ¬ÓÑìÓñ░Óñ¡Óñ¥Óñ░ÓÑÇ ÓñòÓÑï Óñ«Óñ┐Óñ▓ÓÑÇ Óñ╣ÓÑêÓÑñ Óñ£Óñ¥ÓñüÓñÜ ÓñàÓñºÓñ┐ÓñòÓñ¥Óñ░ÓÑÇ Óñ¿Óñ┐Óñ»ÓÑüÓñòÓÑìÓññ ÓñòÓñ░ÓÑçÓñéÓÑñ Óñ¿Óñ┐Óñ»ÓÑüÓñòÓÑìÓññÓñ┐ ÓñòÓÑç Óñ¼Óñ¥Óñª ÓñÂÓñ┐ÓñòÓñ¥Óñ»Óññ ÓñòÓÑÇ Óñ░Óñ©ÓÑÇÓñª Óñ¼Óñ¿ Óñ£Óñ¥ÓñÅÓñùÓÑÇÓÑñ", "The central register sent this complaint directly to the SHO. Assign an enquiry officer to generate the complaint receipt.")}
+                {t("यह शिकायत ░ीय जिस्टर से सीधे थाना भारी को ली ╣ै। जाँच कारी ┐युक्त ░ें। युक्ति के बाद ┐कायत की ░सीद बन जाएगी।", "The central register sent this complaint directly to the SHO. Assign an enquiry officer to generate the complaint receipt.")}
               </p>
             </div>
           </div>
@@ -1810,7 +1810,7 @@ function ComplaintListContent() {
                             type="button"
                             onClick={resetColumnOrder}
                             className="text-[10px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
-                            title={t("ÓñòÓÑëÓñ▓Óñ« ÓñòÓñ¥ ÓñòÓÑìÓñ░Óñ« Óñ░ÓÑÇÓñ©ÓÑçÓñƒ ÓñòÓñ░ÓÑçÓñé", "Reset column order")}
+                            title={t("कॉलम का ░म ░ीसेट ░ें", "Reset column order")}
                           >
                             Reset Order
                           </button>
@@ -1938,13 +1938,13 @@ function ComplaintListContent() {
                       </div>
                       <div className="pt-2 mt-2 border-t border-slate-100 space-y-1">
                         <div className="text-[10px] text-slate-500">
-                          ­ƒÆí <em>{t("ÓñòÓÑëÓñ▓Óñ« ÓñòÓñ¥ ÓñòÓÑìÓñ░Óñ« Óñ¼ÓñªÓñ▓Óñ¿ÓÑç ÓñòÓÑç Óñ▓Óñ┐ÓñÅ ÓñëÓñ©ÓñòÓñ¥ ÓñÂÓÑÇÓñ░ÓÑìÓñÀÓñò ÓñûÓÑÇÓñéÓñÜÓÑçÓñéÓÑñ", "Drag column headers to reorder them.")}</em>
+                          💡 <em>{t("▓म का ░म ▓ने के िए उसका ░्षक खींचें।", "Drag column headers to reorder them.")}</em>
                         </div>
                         <Link
                           href="/settings?tab=table-manager"
                           className="flex items-center justify-between text-[11px] font-bold text-indigo-600 hover:text-indigo-800 pt-1"
                         >
-                          <span>{t("+ ÓñòÓÑëÓñ▓Óñ« Óñ£ÓÑïÓñíÓñ╝ÓÑçÓñé Óñ»Óñ¥ Óñ¬ÓÑìÓñ░Óñ¼ÓñéÓñºÓñ┐Óññ ÓñòÓñ░ÓÑçÓñé", "+ Add/Manage Columns")}</span>
+                          <span>{t("+ कॉलम ╝ें या बéधित ░ें", "+ Add/Manage Columns")}</span>
                           <span>&rarr;</span>
                         </Link>
                       </div>
@@ -2373,7 +2373,7 @@ function ComplaintListContent() {
           </div>
 
           {sortedComplaints.length > 0 && (
-            <div className="cms-pagination"><span>Showing {(page-1)*20+1}ÔÇô{Math.min(page*20,sortedComplaints.length)} of {sortedComplaints.length} complaints</span><div className="flex gap-2 items-center"><button disabled={page===1} onClick={()=>setRegisterPage({key:pageKey,page:page-1})}>Previous</button><span>Page {page} of {pageCount}</span><button disabled={page===pageCount} onClick={()=>setRegisterPage({key:pageKey,page:page+1})}>Next</button></div></div>
+            <div className="cms-pagination"><span>Showing {(page-1)*20+1}–{Math.min(page*20,sortedComplaints.length)} of {sortedComplaints.length} complaints</span><div className="flex gap-2 items-center"><button disabled={page===1} onClick={()=>setRegisterPage({key:pageKey,page:page-1})}>Previous</button><span>Page {page} of {pageCount}</span><button disabled={page===pageCount} onClick={()=>setRegisterPage({key:pageKey,page:page+1})}>Next</button></div></div>
           )}
           {/* Mobile Card-Based View */}
           <div className="md:hidden space-y-3">
@@ -2402,7 +2402,7 @@ function ComplaintListContent() {
                       <Calendar className="w-3 h-3 text-blue-600" />
                       {formatDate(c.createdAt)}
                     </span>
-                    <span>ÔÇó</span>
+                    <span>•</span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
                       {new Date(c.createdAt).toLocaleTimeString("en-IN", {
@@ -2425,7 +2425,7 @@ function ComplaintListContent() {
                         <Phone className="w-3 h-3 text-slate-400" />
                         {c.complainantMobile}
                       </span>
-                      <span>ÔÇó</span>
+                      <span>•</span>
                       <span>{c.categoryDisplay}</span>
                     </div>
                   </div>
@@ -2477,7 +2477,7 @@ function ComplaintListContent() {
                               onClick={() => setAssignDropdownComplaintId((prev) => prev === c.id ? null : c.id)}
                               className="w-full text-xs font-bold gap-1 bg-[#0b192c] text-white hover:bg-slate-800"
                             >
-                              <UserCheck className="w-3.5 h-3.5 text-amber-300" /> Assign EO Ôû¥
+                              <UserCheck className="w-3.5 h-3.5 text-amber-300" /> Assign EO ▾
                             </Button>
                             {assignDropdownComplaintId === c.id && (
                               <div className="absolute left-0 bottom-full mb-1 z-50 w-full bg-white border border-slate-200 rounded-xl shadow-xl py-1 text-left animate-in fade-in-50">
@@ -2648,7 +2648,7 @@ function ComplaintListContent() {
                   <PriorityBadge priority={selectedComplaint.priority} />
                 </div>
                 <h3 className="text-base font-bold text-white">
-                  Complaint Case File ÔÇó {selectedComplaint.policeStation}
+                  Complaint Case File • {selectedComplaint.policeStation}
                 </h3>
               </div>
               <button
@@ -2755,7 +2755,7 @@ function ComplaintListContent() {
                   <div>
                     <span className="text-slate-500">Gender / Age:</span>{" "}
                     <span className="font-medium text-slate-800">
-                      {selectedComplaint.complainantGender} ÔÇó {selectedComplaint.complainantAge ? `${selectedComplaint.complainantAge} Yrs` : "Age not specified"}
+                      {selectedComplaint.complainantGender} • {selectedComplaint.complainantAge ? `${selectedComplaint.complainantAge} Yrs` : "Age not specified"}
                     </span>
                   </div>
                   <div className="sm:col-span-2">
@@ -2899,7 +2899,7 @@ function ComplaintListContent() {
                       className="text-xs font-bold gap-1 bg-[#0b192c] text-white hover:bg-slate-800 cursor-pointer"
                     >
                       <UserCheck className="w-3.5 h-3.5 text-amber-300" />
-                      <span>{selectedComplaint.assignedEoName ? "Reassign EO Ôû¥" : "Assign Enquiry Officer Ôû¥"}</span>
+                      <span>{selectedComplaint.assignedEoName ? "Reassign EO ▾" : "Assign Enquiry Officer ▾"}</span>
                     </Button>
                     {assignDropdownComplaintId === selectedComplaint.id && (
                       <div className="absolute right-0 bottom-full mb-1.5 z-50 w-72 max-w-[calc(100vw-2rem)] bg-white border border-slate-200 rounded-xl shadow-2xl py-1 text-left animate-in fade-in-50">

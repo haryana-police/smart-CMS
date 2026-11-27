@@ -8,6 +8,27 @@ import type { FIRCaseDiaryItem } from "@/types";
 type CaseRegister = "complaints" | "firs";
 const caseTables = { complaints: '"ComplaintRecord"', firs: '"FirRecord"' } as const;
 
+/**
+ * PostgreSQL jsonb cannot store the NUL escape (\u0000 → SQLSTATE 22P05,
+ * DETAIL "\u0000 cannot be converted to text") nor unpaired surrogate escapes
+ * (SQLSTATE 22P02). One poisoned string field must never crash an entire
+ * runtime-store write, so strip NULs and replace unpaired surrogates with the
+ * replacement character in every string value before serializing.
+ */
+function jsonSafeString(value: unknown, indent?: string | number): string {
+  return JSON.stringify(value, (_key, item) => {
+    if (typeof item !== "string") return item;
+    let text = item.replace(/\u0000/g, "");
+    if (/[\uD800-\uDFFF]/.test(text)) {
+      text = text.replace(
+        /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g,
+        "\uFFFD",
+      );
+    }
+    return text;
+  }, indent);
+}
+
 export async function readCaseRecords<T>(
   register: CaseRegister,
   file: string,
@@ -62,10 +83,10 @@ export async function writeCaseRecords(
      FROM jsonb_array_elements($1::jsonb) WITH ORDINALITY AS entries(record, ordinal)
      ON CONFLICT (id) DO UPDATE SET position = EXCLUDED.position, payload = EXCLUDED.payload
      WHERE (existing.position, existing.payload) IS DISTINCT FROM (EXCLUDED.position, EXCLUDED.payload)`,
-    JSON.stringify(payloads),
+    jsonSafeString(payloads),
   );
   if (register !== "firs") return;
-  const notes = JSON.stringify(records.flatMap(fir => (fir.caseDiaries || []).map(
+  const notes = jsonSafeString(records.flatMap(fir => (fir.caseDiaries || []).map(
     (note, index) => ({ firId: fir.id, id: note.id, position: index + 1, payload: note }),
   )));
   await db.$executeRaw`
@@ -115,7 +136,7 @@ export async function readRuntimeJson<T>(file: string, db: Prisma.TransactionCli
 }
 
 export async function writeRuntimeJson(file: string, value: unknown) {
-  const json = JSON.stringify(value, null, 2);
+  const json = jsonSafeString(value, 2);
   if (usesPostgresStore()) {
     const key = databaseKey(file);
     await prisma.$executeRaw`
