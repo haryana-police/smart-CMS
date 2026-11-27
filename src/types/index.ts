@@ -298,6 +298,7 @@ export interface ComplaintItem extends TransferableRecord {
   source: ComplaintSource;
   category: ComplaintCategory;
   categoryDisplay: string;
+  subCategory?: string;
   priority: ComplaintPriority;
   status: ComplaintStatus;
   

@@ -22,6 +22,7 @@ export const complaintRegistrationSchema = z.object({
     "HARASSMENT_STALKING",
     "OTHER_GENERAL",
   ]),
+  subCategory: z.string().max(120).optional(),
   priority: z.enum(["ROUTINE", "URGENT", "CRITICAL_SENSITIVE", "CM_WINDOW_VIP"]),
   
   // Incident Info

@@ -441,6 +441,7 @@ export default function RegisterComplaintPage() {
   const [incidentDate, setIncidentDate] = useState(() => getTodayIsoIST());
   const [incidentTime, setIncidentTime] = useState("11:30");
   const [incidentApproxPeriod, setIncidentApproxPeriod] = useState("");
+  const [incidentCategoryOther, setIncidentCategoryOther] = useState("");
   const [incidentCategory, setIncidentCategory] = useState<
     | "CYBER_CRIME"
     | "PROPERTY_THEFT_BURGLARY"
@@ -655,6 +656,7 @@ export default function RegisterComplaintPage() {
     if (draft.incidentTime !== undefined) setIncidentTime(draft.incidentTime);
     if (draft.incidentApproxPeriod !== undefined) setIncidentApproxPeriod(draft.incidentApproxPeriod);
     if (draft.incidentCategory !== undefined) setIncidentCategory(draft.incidentCategory);
+    if (draft.incidentCategoryOther !== undefined) setIncidentCategoryOther(String(draft.incidentCategoryOther ?? ""));
     if (draft.incidentDetails !== undefined) setIncidentDetails(draft.incidentDetails);
     if (Array.isArray(draft.attachments)) setAttachments(draft.attachments);
     if (draft.intakeMode !== undefined) setIntakeMode(draft.intakeMode);
@@ -727,6 +729,7 @@ export default function RegisterComplaintPage() {
         incidentTime,
         incidentApproxPeriod,
         incidentCategory,
+        incidentCategoryOther,
         incidentDetails,
         attachments: attachments.map((a: any) => ({ ...a, dataUrl: undefined })),
         intakeMode,
@@ -782,6 +785,7 @@ export default function RegisterComplaintPage() {
     incidentTime,
     incidentApproxPeriod,
     incidentCategory,
+    incidentCategoryOther,
     incidentDetails,
     attachments,
     intakeMode,
@@ -844,6 +848,7 @@ export default function RegisterComplaintPage() {
         incidentTime,
         incidentApproxPeriod,
         incidentCategory,
+        incidentCategoryOther,
         incidentDetails,
         attachments: attachments.map((a: any) => ({ ...a, dataUrl: undefined })),
         intakeMode,
@@ -961,6 +966,7 @@ export default function RegisterComplaintPage() {
     setIncidentTime("11:30");
     setIncidentApproxPeriod("");
     setIncidentCategory("FINANCIAL_FRAUD_CHEATING");
+    setIncidentCategoryOther("");
     setIncidentDetails("");
     setAttachments([]);
 
@@ -2176,6 +2182,9 @@ export default function RegisterComplaintPage() {
     if (!incidentPlace.trim()) {
       errors["incidentPlace"] = "Place of incident is required";
     }
+    if (incidentCategory === "OTHER_GENERAL" && !incidentCategoryOther.trim()) {
+      errors["incidentCategoryOther"] = "Please type the specific category for Other General Matter";
+    }
     const todayStr = getTodayIsoIST();
     if (isDateTimeKnown && (!incidentDate.trim() || incidentDate > todayStr)) {
       errors["incidentDate"] = !incidentDate.trim() ? "Date of incident is required" : "Date of incident cannot be in the future";
@@ -2377,6 +2386,7 @@ export default function RegisterComplaintPage() {
           source: sourceChannel,
           priority: priorityLevel,
       category: incidentCategory,
+      subCategory: incidentCategory === "OTHER_GENERAL" && incidentCategoryOther.trim() ? incidentCategoryOther.trim() : undefined,
           fivePNumber: fivePNumber.trim() || undefined,
           officeReferenceNumber: officeReferenceNumber.trim() || fivePNumber.trim() || undefined,
           sourceOffice: sourceOffice.trim() || undefined,
@@ -4150,13 +4160,14 @@ export default function RegisterComplaintPage() {
                         (b) Class of Incident (Crime Category) *
                       </label>
                     </div>
+                    <div className="flex gap-2">
                     <select
                       value={incidentCategory}
                       onChange={(e: any) => {
                         setIncidentCategory(e.target.value);
                         markFieldAsEdited("incidentCategory");
                       }}
-                      className={`w-full h-10 px-3 py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-[#0b192c] font-medium transition-all ${
+                      className={`h-10 px-3 py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-[#0b192c] font-medium transition-all flex-1 min-w-0 ${
                         isAutofilled("incidentCategory")
                           ? "!border-emerald-500 !bg-emerald-50/60 ring-1 ring-emerald-400/80 shadow-xs shadow-emerald-100"
                           : "bg-white border-slate-300"
@@ -4184,6 +4195,27 @@ export default function RegisterComplaintPage() {
                         </>
                       )}
                     </select>
+                    {incidentCategory === "OTHER_GENERAL" && (
+                      <input
+                        type="text"
+                        value={incidentCategoryOther}
+                        onChange={(e: any) => {
+                          setIncidentCategoryOther(e.target.value);
+                          markFieldAsEdited("incidentCategoryOther");
+                        }}
+                        placeholder="e.g. Property Marking Dispute"
+                        title="Type the specific category (required for Other General Matter)"
+                        aria-label="Specify other crime category"
+                        maxLength={120}
+                        className={`shrink-0 w-[240px] h-10 px-3 py-2 text-xs sm:text-sm rounded-lg border bg-white focus:ring-2 focus:ring-[#0b192c] focus:outline-none transition-all ${
+                          validationErrors.incidentCategoryOther ? "border-red-500 bg-red-50" : "border-slate-300"
+                        }`}
+                      />
+                    )}
+                    </div>
+                    {validationErrors.incidentCategoryOther && (
+                      <p className="text-[11px] text-red-600 mt-0.5">{validationErrors.incidentCategoryOther}</p>
+                    )}
                   </div>
 
                   {/* (c) Date / Time of Incident Known toggle & Inputs */}
