@@ -2102,7 +2102,7 @@ function ComplaintListContent() {
             </Button>
           </CardContent>
         </Card>
-      ) : sortedComplaints.length === 0 ? (
+      ) : complaints.length === 0 ? (
         <EmptyState
           title={isEo ? `No complaints assigned to ${currentUser.name}` : "No complaints found"}
           description={
