@@ -275,10 +275,18 @@ export const suggestionStore = {
 
   /**
    * Snapshot for the engine: mined word-frequency prior, overridden by the
-   * officer's learned accept/reject weights, plus saved dictionary phrases
-   * and ALL terms harvested from uploaded documents across the website.
+   * officer's learned accept/reject weights, the officer's saved dictionary
+   * phrases, and the raw vocabulary harvested from uploaded documents.
+   *
+   * `personalPhrases` deliberately contains ONLY what the officer saved
+   * themselves - raw document harvest goes out in the separate
+   * `harvestedPhrases` / `harvestedWords` buckets so the engine can keep
+   * OCR-noisy terms from dominating mid-word completions.
+   *
+   * @param context Text before the caret; when supplied, mined next-word
+   *                predictions for that context are included.
    */
-  getEngineOptions(): GDSuggestionOptions {
+  getEngineOptions(context?: string): GDSuggestionOptions {
     const weights: Record<string, number> = {};
 
     // Mined corpus frequencies give fresh installs a sensible prior.
@@ -304,16 +312,14 @@ export const suggestionStore = {
       if (!weights[norm]) weights[norm] = 2.0;
     }
 
-    const personalPhrases = [
-      ...persisted.phrases.map((p) => p.text),
-      ...(persisted.harvestedPhrases || []),
-      ...(persisted.harvestedWords || []),
-    ];
+    const personalPhrases = persisted.phrases.map((p) => p.text);
 
     return {
       weights,
       personalPhrases,
-      nextWords: [],
+      harvestedPhrases: [...(persisted.harvestedPhrases || [])],
+      harvestedWords: [...(persisted.harvestedWords || [])],
+      nextWords: context ? suggestionStore.getNextWords(context) : [],
     };
   },
 

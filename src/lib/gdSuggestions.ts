@@ -1177,7 +1177,7 @@ export interface GDChainState {
  *  2. Empty field -> entry-type openers, offered in BOTH English and Hindi.
  *  3. Officer just finished a trigger phrase -> that sequence's first fragment.
  *  4. Officer mid-word -> ranked completions (personal dictionary, word bank,
- *     mined next-words, then fuzzy typo matches).
+ *     mined next-words, length-gated harvested terms, then fuzzy typo matches).
  *  5. Officer after a space -> mined next-word predictions.
  *
  * Candidates are ranked by learned weight (accepts up, rejects down), so the
@@ -1193,6 +1193,18 @@ export interface GDSuggestionOptions {
   nextWords?: string[];
   /** The officer's saved dictionary phrases (words or short phrases). */
   personalPhrases?: string[];
+  /**
+   * Raw multi-word phrases extracted from uploaded documents. These may carry
+   * OCR noise, so they are used ONLY as after-space phrase continuations
+   * (anchored on a completed word) - never as mid-word completions.
+   */
+  harvestedPhrases?: string[];
+  /**
+   * Raw single tokens extracted from uploaded documents. They may contain OCR
+   * noise, so mid-word completions from this tier need a longer typed prefix
+   * and always rank below the curated word bank at equal learning.
+   */
+  harvestedWords?: string[];
   /**
    * Learned weight per key. Keys are normalized tokens (word/next/dict
    * suggestions) or `seq:<sequence-id>` (openers/continuations).
@@ -1288,9 +1300,16 @@ export function getGDSuggestions(
   }
 
   /* --- Split the tail into the token being typed (if any). --- */
+  // The token starts AFTER the whole trailing whitespace run. search() only
+  // reports where the run BEGINS, so slice(lastSpace + 1) leaked a leading
+  // space into the fragment whenever the officer double-spaced (dictation and
+  // fast typing do this constantly). That corrupted replaceLength, which made
+  // the ghost preview position itself as if it replaced characters the field
+  // still displays - the grey preview was painted over the typed word. The
+  // \S* capture group keeps the fragment clean for one OR many spaces.
   const endsWithSpace = /\s$/.test(value);
-  const lastSpace = value.search(/\s+\S*$/);
-  const fragment = endsWithSpace ? "" : value.slice(lastSpace + 1);
+  const tailMatch = endsWithSpace ? null : /\s+(\S*)$/.exec(value);
+  const fragment = endsWithSpace ? "" : tailMatch ? tailMatch[1] : value;
   const typedHead = value.slice(0, value.length - fragment.length);
   // Script filter anchors on the token being typed (or, right after a space,
   // on everything before it) so the strip stays monolingual.
@@ -1326,9 +1345,12 @@ export function getGDSuggestions(
     const lastWord = rawTokens[rawTokens.length - 1] || "";
     const normLast = normalize(lastWord);
 
-    // Look for multi-word phrases from harvested uploaded documents starting with lastWord
+    // Look for multi-word phrases starting with the completed word. Both the
+    // officer's saved dictionary and phrases harvested from uploaded documents
+    // feed this tier: the anchor is a WHOLE completed word, so noisy harvested
+    // entries only surface when the officer actually typed that word.
     if (normLast.length >= 2) {
-      for (const p of options.personalPhrases ?? []) {
+      for (const p of [...(options.personalPhrases ?? []), ...(options.harvestedPhrases ?? [])]) {
         if (out.length >= MAX_CANDIDATES) break;
         const normP = normalize(p);
         if (normP.startsWith(normLast + " ") && normP !== normLast) {
@@ -1359,13 +1381,22 @@ export function getGDSuggestions(
     }
   }
 
-  /* --- 4b. Mid-word: ranked completions (dictionary > bank > mined > fuzzy). --- */
+  /* --- 4b. Mid-word: ranked completions (dictionary > bank > mined > harvested > fuzzy). --- */
   const normFrag = normalize(fragment);
   if (fragment.length > 0 && normFrag.length > 0) {
     const ranked: RankedCandidate[] = [];
     const seen = new Set<string>();
 
-    const addWord = (word: string, source: "word" | "dict") => {
+    /**
+     * Mid-word completions are offered by TIER, each with its own quality gate
+     * and weight boost. Text harvested from uploaded documents can carry OCR
+     * noise ("aonsignment" for "a consignment"), so that vocabulary needs a
+     * longer typed prefix before it may surface and always ranks below the
+     * curated bank at equal learning. The officer's own saved dictionary keeps
+     * the full Gboard-style boost at any fragment length.
+     */
+    const addWord = (word: string, source: "word" | "dict", boost: number, minFrag: number) => {
+      if (normFrag.length < minFrag) return;
       const norm = normalize(word);
       if (!norm || seen.has(norm)) return;
       if (!matchesContextScript(word, contextScript)) return;
@@ -1380,17 +1411,20 @@ export function getGDSuggestions(
           sequenceIndex: -1,
           key: norm,
         },
-        weight: weightOf(options, norm) * (source === "dict" ? 2.0 : 1),
+        weight: weightOf(options, norm) * boost,
         exact: firstWord === normFrag || norm === normFrag,
         extraChars: firstWord.length - normFrag.length,
       });
     };
 
-    // Personal dictionary first (Gboard personal-dictionary boost + harvested uploaded terms),
-    // then the static bank, then mined next-words that happen to start with the token.
-    for (const p of options.personalPhrases ?? []) addWord(p, "dict");
-    for (const w of WORD_BANK) addWord(w, "word");
-    for (const w of options.nextWords ?? []) addWord(w, "word");
+    // 1) The officer's own saved dictionary (Gboard personal-dictionary boost),
+    // 2) the curated police vocabulary,
+    // 3) mined next-words from the corpus model, then
+    // 4) raw terms harvested from uploaded documents (noisier -> gated + demoted).
+    for (const p of options.personalPhrases ?? []) addWord(p, "dict", 2.0, 1);
+    for (const w of WORD_BANK) addWord(w, "word", 1.0, 1);
+    for (const w of options.nextWords ?? []) addWord(w, "word", 1.0, 1);
+    for (const w of options.harvestedWords ?? []) addWord(w, "word", 0.6, 4);
 
     // Fuzzy tier (Gboard-style typo tolerance): one edit away, same script.
     if (ranked.length < 3 && normFrag.length >= 4) {
