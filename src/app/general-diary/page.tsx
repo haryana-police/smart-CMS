@@ -60,16 +60,27 @@ import { toDDMMYYYY, parseGDActivityDateTimeToMs, getGdRecordRemainingTime, isGd
 
 type ActiveTab = "REGISTER" | "SUGGESTIONS_DRAFTS";
 
+function getGdDisplayNumber(record: GeneralDiaryRecord): string {
+  if (!record.isLocked) return "—";
+  if (record.sequencePerDay) return String(record.sequencePerDay).padStart(2, "0");
+
+  const sequence = record.gdNumber?.match(/-(\d+)$/)?.[1];
+  return sequence ? String(parseInt(sequence, 10)).padStart(2, "0") : (record.gdNumber || "—");
+}
+
 function GeneralDiaryContent() {
   const { t } = useLanguage();
   const router = useRouter();
   const { currentUser } = useAuth();
   const searchParams = useSearchParams();
+  const printRegisterFromNav = searchParams.get("printRegister") === "1";
   const initialType = searchParams.get("type") || "ALL";
   const initialSearch = searchParams.get("search") || "";
   const tabParam = searchParams.get("tab") as ActiveTab | null;
   const activeTab: ActiveTab = tabParam === "SUGGESTIONS_DRAFTS" ? "SUGGESTIONS_DRAFTS" : "REGISTER";
   const [types, setTypes] = useState<GDEntryTypeConfig[]>([]);
+  const [mobileRegisterView, setMobileRegisterView] = useState<"table" | "list">("table");
+  const showMobileList = activeTab === "REGISTER" && mobileRegisterView === "list";
 
   // Reset pagination to page 1 when switching tabs
   const prevTabRef = useRef(activeTab);
@@ -721,19 +732,16 @@ function GeneralDiaryContent() {
     );
   };
 
+  function openRecordPreview(record: GeneralDiaryRecord) {
+    setSelectedRecord(record);
+    setInspectAutoPrint(false);
+    setInspectModalOpen(true);
+  }
+
   const renderGDCell = (col: GDColKey, rec: GeneralDiaryRecord) => {
     switch (col) {
       case "gdNumber": {
         const remTime = !rec.isLocked ? getGdRecordRemainingTime(rec) : null;
-        let seqNum = "—";
-        if (rec.isLocked) {
-          if (rec.sequencePerDay) {
-            seqNum = String(rec.sequencePerDay).padStart(2, "0");
-          } else {
-            const m = (rec.gdNumber || "").match(/-(\d+)$/);
-            seqNum = m && m[1] ? String(parseInt(m[1], 10)).padStart(2, "0") : (rec.gdNumber || "—");
-          }
-        }
         return (
           <td key="gdNumber" className="py-3 px-2 align-top w-24 min-w-[85px] text-center">
             <div className="flex flex-col items-center justify-center gap-0.5 font-mono text-center leading-tight">
@@ -742,7 +750,7 @@ function GeneralDiaryContent() {
                 className="font-black text-xs text-blue-950 block whitespace-nowrap text-center"
                 title={rec.isLocked ? rec.gdNumber : "No GD No. (not added)"}
               >
-                {seqNum}
+                {getGdDisplayNumber(rec)}
               </span>
 
               {/* 24-Hour Expiration Indicator for Unlocked Entries */}
@@ -865,56 +873,45 @@ function GeneralDiaryContent() {
       {/* Top Banner Header (compact stack on <640px mobile per UI-01) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 border-b border-slate-200 pb-2.5 sm:pb-4">
         <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-6">
-          <h1 className="text-lg sm:text-2xl font-bold text-[#0b192c] tracking-tight">
-            General Diary
-          </h1>
-
-          {/* Compact mobile primary CTA bar aligned with title (<640px only) */}
-          <div className="flex sm:hidden items-center gap-1.5">
-            <Link href="/general-diary/new">
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                className="min-h-[40px] text-xs font-bold gap-1 px-2.5 cursor-pointer"
-                title="Create a new General Diary entry"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span>New GD</span>
-              </Button>
-            </Link>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSelectedPrintDate("");
-                setPrintDailyRegisterOpen(true);
-              }}
-              className="min-h-[40px] text-xs font-bold gap-1 border-slate-300 bg-white px-2.5 cursor-pointer"
-              title="Register Print & PDF"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-blue-700" />
-              <span>Print</span>
-            </Button>
+          <div className="flex w-full items-center justify-between gap-2 lg:contents">
+            <h1 className="text-lg sm:text-2xl font-bold text-[#0b192c] tracking-tight">
+              General Diary
+            </h1>
+            {activeTab === "REGISTER" && (
+              <div role="group" aria-label="GD register view" className="flex shrink-0 rounded-md border border-slate-200 bg-slate-100 p-0.5 lg:hidden">
+                {(["table", "list"] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    aria-pressed={mobileRegisterView === view}
+                    onClick={() => setMobileRegisterView(view)}
+                    className={`min-h-8 rounded px-2.5 text-xs font-semibold ${
+                      mobileRegisterView === view ? "bg-[#203c88] text-white" : "text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {view === "table" ? "Table" : "List"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tabs Navigation next to Title */}
-          <div className="w-full sm:w-auto flex items-center text-xs sm:text-sm font-semibold gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200 overflow-x-auto">
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex items-stretch sm:items-center text-xs sm:text-sm font-semibold gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200 sm:overflow-x-auto">
             <button
               type="button"
               onClick={() => {
                 setPage(1);
                 router.push("/general-diary");
               }}
-              className={`min-h-[40px] sm:min-h-0 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer whitespace-nowrap ${
+              className={`min-w-0 min-h-[40px] sm:min-h-0 px-2 sm:px-3 py-1.5 rounded-lg transition-all flex items-center justify-center sm:justify-start gap-1 sm:gap-2 cursor-pointer leading-tight sm:leading-normal sm:whitespace-nowrap ${
                 activeTab === "REGISTER"
                   ? "bg-white text-blue-950 font-bold shadow-xs border border-slate-200/60"
                   : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
               }`}
             >
               <span>General Diary Register</span>
-              <span className="text-[11px] font-mono bg-blue-100 text-blue-900 px-2 py-0.5 rounded-full font-bold">
+              <span className="shrink-0 text-[11px] font-mono bg-blue-100 text-blue-900 px-2 py-0.5 rounded-full font-bold">
                 {activeTab === "REGISTER"
                   ? paginatedData.total
                   : (persistentRegisterCount ?? paginatedData.registerCount ?? paginatedData.todayCount ?? paginatedData.lockedCount)}
@@ -927,14 +924,14 @@ function GeneralDiaryContent() {
                 setPage(1);
                 router.push("/general-diary?tab=SUGGESTIONS_DRAFTS");
               }}
-              className={`min-h-[40px] sm:min-h-0 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer whitespace-nowrap ${
+              className={`min-w-0 min-h-[40px] sm:min-h-0 px-2 sm:px-3 py-1.5 rounded-lg transition-all flex items-center justify-center sm:justify-start gap-1 sm:gap-2 cursor-pointer leading-tight sm:leading-normal sm:whitespace-nowrap ${
                 activeTab === "SUGGESTIONS_DRAFTS"
                   ? "bg-white text-purple-950 font-bold shadow-xs border border-slate-200/60"
                   : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
               }`}
             >
               <span>Auto-Suggestions &amp; Drafts</span>
-              <span className="text-[11px] font-mono bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-bold">
+              <span className="shrink-0 text-[11px] font-mono bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-bold">
                 {activeTab === "SUGGESTIONS_DRAFTS"
                   ? paginatedData.total
                   : (persistentSuggestionsCount ?? paginatedData.suggestionsCount ?? (paginatedData.suggestedCount + paginatedData.draftCount))}
@@ -943,9 +940,9 @@ function GeneralDiaryContent() {
           </div>
         </div>
 
-        {/* Desktop/Tablet Action Buttons (kept unchanged on sm+) */}
-        <div className="hidden sm:flex flex-wrap items-center gap-2.5">
-          <Link href="/general-diary/new">
+        {/* Register tools and desktop create action */}
+        <div className="hidden lg:flex flex-wrap items-center gap-2.5">
+          <Link href="/general-diary/new" className="inline-flex">
             <Button
               type="button"
               variant="primary"
@@ -996,9 +993,9 @@ function GeneralDiaryContent() {
       )}
 
       {/* Friendly Search & Filter Bar (No outer card/border) */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+      <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 sm:gap-3 items-center">
         {/* 1. Keyword Search */}
-        <div className="sm:col-span-5">
+        <div className="col-span-2 sm:col-span-5 min-w-0">
           <div className="relative flex items-center gap-1.5">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
@@ -1010,8 +1007,11 @@ function GeneralDiaryContent() {
                   setPage(1);
                 }}
                 placeholder="Search GD by officer, subject, keyword, GD no..."
-                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-[#0b192c]"
+                className="peer w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-[#0b192c] max-sm:h-9 max-sm:placeholder:opacity-0"
               />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-8 hidden items-center text-xs text-slate-500 max-sm:peer-placeholder-shown:flex">
+                Search GD entries
+              </span>
             </div>
             <VoiceInputButton
               onTranscript={(text) => {
@@ -1026,14 +1026,14 @@ function GeneralDiaryContent() {
         </div>
 
         {/* 2. Type Filter */}
-        <div className="sm:col-span-3">
+        <div className="min-w-0 sm:col-span-3">
           <select
             value={typeFilter}
             onChange={(e) => {
               setTypeFilter(e.target.value);
               setPage(1);
             }}
-            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold max-sm:h-8"
           >
             <option value="ALL">All GD Types</option>
             {types.map((t) => (
@@ -1045,14 +1045,14 @@ function GeneralDiaryContent() {
         </div>
 
         {/* 3. Entry Date — Small Compact Box */}
-        <div className="sm:col-span-4 flex items-center gap-2 sm:justify-self-end w-full sm:w-auto">
+        <div className="sm:col-span-4 flex min-w-0 items-center gap-2 sm:justify-self-end w-full sm:w-auto">
           <button
             type="button"
             onClick={() => {
               setSelectedDate("");
               setPage(1);
             }}
-            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer shrink-0 ${
+            className={`max-sm:sr-only max-sm:focus:not-sr-only px-2 py-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer shrink-0 ${
               !selectedDate
                 ? "bg-blue-600 text-white"
                 : "bg-slate-100 text-slate-700 hover:bg-slate-200"
@@ -1061,7 +1061,7 @@ function GeneralDiaryContent() {
           >
             All
           </button>
-          <div className="w-full sm:w-[145px]">
+          <div className="min-w-0 w-full sm:w-[145px]">
             <DatePickerDDMMYYYY
               value={selectedDate}
               max={todayISO}
@@ -1076,7 +1076,7 @@ function GeneralDiaryContent() {
         </div>
       </div>
 
-      {/* Main Smart GD Register Table View */}
+      {/* Main Smart GD Register */}
       {fetchError ? (
         <div role="alert" className="p-6 bg-red-50 border border-red-200 rounded-xl text-center space-y-3">
           <p className="text-sm font-bold text-red-800">{fetchError}</p>
@@ -1100,7 +1100,55 @@ function GeneralDiaryContent() {
         />
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
+          {showMobileList && (
+            <div className="lg:hidden">
+              {displayedRecords.length ? (
+                <ul aria-label="Compact General Diary list" className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900">
+                  {displayedRecords.map((record) => {
+                    const [date, ...timeParts] = record.activityDateTime.split(" ");
+                    return (
+                      <li key={record.id}>
+                        <button
+                          type="button"
+                          onClick={() => openRecordPreview(record)}
+                          className="grid w-full grid-cols-[minmax(2.25rem,auto)_minmax(0,1fr)_auto] items-center gap-2 px-2.5 py-2.5 text-left transition-colors hover:bg-blue-50/70 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600 dark:hover:bg-slate-800"
+                        >
+                          <span title={record.gdNumber} className="max-w-16 border-r border-slate-200 pr-2 font-mono text-xs font-bold leading-tight text-blue-950 dark:border-slate-700 dark:text-blue-200">
+                            <span className="block">GD</span>
+                            <span className="block break-all">{getGdDisplayNumber(record)}</span>
+                          </span>
+                          <span className="min-w-0 space-y-0.5 [overflow-wrap:anywhere]">
+                            <span className="block text-[11px] font-semibold leading-snug text-[#203c88] dark:text-blue-300">{record.typeDisplay || "—"}</span>
+                            <span className="block text-xs font-bold leading-snug text-slate-950 dark:text-slate-100">{record.subject || "—"}</span>
+                            <span className="block text-[11px] leading-snug text-slate-600 dark:text-slate-400">{record.entryForOfficer.name}</span>
+                          </span>
+                          <span className="flex items-center gap-1 text-right">
+                            <span className="whitespace-nowrap text-[11px] leading-tight text-slate-600 dark:text-slate-300">
+                              <span className="block font-semibold">{timeParts.join(" ")}</span>
+                              <span className="block">{toDDMMYYYY(date)}</span>
+                            </span>
+                            <ChevronRight className="size-4 shrink-0 text-[#203c88] dark:text-blue-300" aria-hidden="true" />
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <EmptyState
+                  title="No matching GD entries found"
+                  description="Clear your search or column filter to view all entries."
+                  actionLabel="Clear Filter & Show All"
+                  onAction={() => {
+                    setColumnSearch({});
+                    setActiveSearchCol(null);
+                    setKeyword("");
+                  }}
+                />
+              )}
+            </div>
+          )}
+          <div className={`rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden ${showMobileList ? "hidden lg:block" : ""}`}>
             <div className="overflow-x-auto w-full">
               <table className="min-w-[1100px] w-full text-xs text-left">
               <thead className="bg-[#0b192c] text-white uppercase text-[11px] tracking-wider font-sans">
@@ -1198,9 +1246,7 @@ function GeneralDiaryContent() {
                       key={rec.id}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest("button, a, input, select")) return;
-                        setSelectedRecord(rec);
-                        setInspectAutoPrint(false);
-                        setInspectModalOpen(true);
+                        openRecordPreview(rec);
                       }}
                       className={`cursor-pointer hover:bg-blue-50/50 transition-colors ${
                         isSuggested ? "bg-purple-50/30" : isDraft ? "bg-amber-50/30" : ""
@@ -1310,8 +1356,15 @@ function GeneralDiaryContent() {
 
       {/* Print Daily Register Modal (print preview + window.print) */}
       <GDPrintModal
-        isOpen={printDailyRegisterOpen}
-        onClose={() => setPrintDailyRegisterOpen(false)}
+        isOpen={printDailyRegisterOpen || printRegisterFromNav}
+        onClose={() => {
+          setPrintDailyRegisterOpen(false);
+          if (printRegisterFromNav) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("printRegister");
+            window.history.replaceState(null, "", url);
+          }
+        }}
         initialDate={selectedPrintDate}
       />
 

@@ -38,11 +38,35 @@ import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { currentUser, isAuthenticated, switching } = useAuth();
+  const { currentUser, sessionUser, isAuthenticated, switching } = useAuth();
   const { t } = useLanguage();
 
   const router = useRouter();
   const [complaintSaveError,setComplaintSaveError]=useState('');
+  const [parthPreference, setParthPreference] = useState<{ key: string; hidden: boolean }>();
+  const parthPreferenceKey = `cms:mobile-parth-hidden:${sessionUser.id}`;
+  const mobileParthHidden = parthPreference?.key === parthPreferenceKey && parthPreference.hidden;
+
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+    let hidden = false;
+    try {
+      hidden = localStorage.getItem(parthPreferenceKey) === "true";
+    } catch {
+      // The setting still works for the current session.
+    }
+    setParthPreference({ key: parthPreferenceKey, hidden });
+  }, [isAuthenticated, parthPreferenceKey]);
+
+  function setMobileParthHidden(hidden: boolean) {
+    setParthPreference({ key: parthPreferenceKey, hidden });
+    try {
+      localStorage.setItem(parthPreferenceKey, String(hidden));
+    } catch {
+      // The setting still works for the current session.
+    }
+  }
+
   React.useEffect(() => {
     const showSaveError = (event: Event) => setComplaintSaveError(String((event as CustomEvent).detail));
     window.addEventListener("complaints_save_error", showSaveError);
@@ -85,7 +109,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Developer view-as indicator: stays visible while browsing another officer's ID */}
         <ViewAsBanner />
         {/* Mobile Header */}
-        <MobileHeader />
+        <MobileHeader
+          mobileParthHidden={mobileParthHidden}
+          onToggleMobileParth={() => setMobileParthHidden(!mobileParthHidden)}
+        />
 
         {/* Desktop Top Header Bar - Minimalist, clean backdrop-blur */}
         <header className="cms-topbar hidden lg:flex items-center justify-between min-h-14 px-6 bg-white text-slate-800 border-b border-slate-200/90 sticky top-0 z-45">
@@ -175,7 +202,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Floating Draggable CMS AI Agent */}
-      <DraggableAgentButton />
+      <DraggableAgentButton
+        hiddenOnMobile={mobileParthHidden}
+        onHideOnMobile={() => setMobileParthHidden(true)}
+      />
 
       {/* Universal Camera & File Upload Option Selector */}
       <GlobalUploadCameraModal />

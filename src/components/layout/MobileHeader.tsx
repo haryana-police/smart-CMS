@@ -5,7 +5,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { canRegisterFir } from "@/lib/firIntegrity";
 import { usePathname } from "next/navigation";
-import { Shield, Bell, Menu, X, UserCog, BookOpen, FileText, ChevronDown, ArrowLeft, LayoutGrid, PlusCircle, Scale, ClipboardList, FileBarChart, FileCheck2, BookmarkCheck, ReceiptText, Home } from "lucide-react";
+import { Shield, Bell, Menu, X, UserCog, BookOpen, FileText, ChevronDown, ArrowLeft, LayoutGrid, PlusCircle, Scale, ClipboardList, FileBarChart, FileCheck2, BookmarkCheck, ReceiptText, Home, Bot } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { TopBarHindiAutocorrect } from "./TopBarHindiAutocorrect";
 import { TopBarDictation } from "./TopBarDictation";
@@ -18,7 +18,10 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { cn } from "@/lib/utils";
 
-export function MobileHeader() {
+export function MobileHeader({ mobileParthHidden, onToggleMobileParth }: {
+  mobileParthHidden: boolean;
+  onToggleMobileParth: () => void;
+}) {
   const pathname = usePathname();
   const { currentUser, sessionUser, isViewAs, logout } = useAuth();
   const { t } = useLanguage();
@@ -111,7 +114,7 @@ export function MobileHeader() {
 
       {/* Mobile Drawer Menu */}
       {drawerOpen && (
-        <div className="print:hidden fixed inset-0 z-50 lg:hidden flex" role="dialog" aria-modal="true" aria-label="Mobile navigation menu">
+        <div className="print:hidden fixed inset-0 z-[60] lg:hidden flex" role="dialog" aria-modal="true" aria-label="Mobile navigation menu">
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
             onClick={() => setDrawerOpen(false)}
@@ -132,17 +135,36 @@ export function MobileHeader() {
               </button>
             </div>
 
-            {/* Phone (<640px) Quick Utilities inside Drawer */}
-            <div className="sm:hidden p-2.5 border-b border-slate-200/80 dark:border-[#223456] bg-slate-50/80 dark:bg-[#091326]">
+            {/* Quick Utilities inside the mobile drawer */}
+            <div className="p-2.5 border-b border-slate-200/80 dark:border-[#223456] bg-slate-50/80 dark:bg-[#091326]">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
                 {t("Quick Tools")}
               </p>
               <div className="flex flex-wrap items-center gap-2">
-                <TopBarModuleSwitcher isMobile={true} />
-                <TopBarThemeToggle />
-                <TopBarDictation isMobile={true} />
+                <div className="contents sm:hidden">
+                  <TopBarModuleSwitcher isMobile={true} />
+                  <TopBarThemeToggle />
+                  <TopBarDictation isMobile={true} />
+                </div>
                 <TopBarLanguageSwitcher isMobile={true} />
-                <TopBarPersonaSwitcher isMobile={true} />
+                <button
+                  type="button"
+                  onClick={onToggleMobileParth}
+                  aria-label={t("Floating PARTH button")}
+                  aria-pressed={!mobileParthHidden}
+                  title={mobileParthHidden ? t("Show PARTH") : t("Hide PARTH")}
+                  className={cn(
+                    "flex size-11 shrink-0 items-center justify-center rounded-md border transition-colors",
+                    mobileParthHidden
+                      ? "border-slate-200 bg-white text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                      : "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-500 dark:bg-blue-950 dark:text-blue-200"
+                  )}
+                >
+                  <Bot className="size-5" aria-hidden="true" />
+                </button>
+                <div className="contents sm:hidden">
+                  <TopBarPersonaSwitcher isMobile={true} />
+                </div>
               </div>
             </div>
 

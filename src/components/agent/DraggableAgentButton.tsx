@@ -1,15 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Sparkles, Move, Shield, Bot } from "lucide-react";
+import { Sparkles, Shield, Bot } from "lucide-react";
 import { CmsAgentModal } from "./CmsAgentModal";
 
-export function DraggableAgentButton() {
+const MOBILE_VIEW = "(width < 64rem)";
+const LONG_PRESS_MS = 650;
+
+export function DraggableAgentButton({ hiddenOnMobile, onHideOnMobile }: {
+  hiddenOnMobile: boolean;
+  onHideOnMobile: () => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 24, y: 120 });
   const [mounted, setMounted] = useState(false);
-  const dragRef = useRef<HTMLDivElement>(null);
+  const pointerIdRef = useRef<number | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartRef = useRef<{ startX: number; startY: number; posX: number; posY: number }>({
     startX: 0,
     startY: 0,
@@ -17,6 +24,19 @@ export function DraggableAgentButton() {
     posY: 0,
   });
   const hasMovedRef = useRef(false);
+
+  function clearLongPress() {
+    if (longPressRef.current !== null) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }
+
+  useEffect(() => clearLongPress, []);
+
+  useEffect(() => {
+    if (hiddenOnMobile && window.matchMedia(MOBILE_VIEW).matches) setIsOpen(false);
+  }, [hiddenOnMobile]);
 
   useEffect(() => {
     setMounted(true);
@@ -45,7 +65,9 @@ export function DraggableAgentButton() {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only drag with left mouse button or touch
-    if (e.button !== 0 && e.pointerType === "mouse") return;
+    if (e.button !== 0 || pointerIdRef.current !== null) return;
+
+    pointerIdRef.current = e.pointerId;
     hasMovedRef.current = false;
     setIsDragging(true);
 
@@ -56,17 +78,31 @@ export function DraggableAgentButton() {
       posY: position.y,
     };
 
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    if (window.matchMedia(MOBILE_VIEW).matches) {
+      longPressRef.current = setTimeout(() => {
+        clearLongPress();
+        if (!window.matchMedia(MOBILE_VIEW).matches) return;
+        pointerIdRef.current = null;
+        setIsDragging(false);
+        setIsOpen(false);
+        onHideOnMobile();
+      }, LONG_PRESS_MS);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (pointerIdRef.current !== e.pointerId) return;
     const deltaX = e.clientX - dragStartRef.current.startX;
     const deltaY = e.clientY - dragStartRef.current.startY;
 
-    if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) {
+    const threshold = longPressRef.current !== null ? 8 : 4;
+    if (Math.abs(deltaX) > threshold || Math.abs(deltaY) > threshold) {
       hasMovedRef.current = true;
+      clearLongPress();
     }
+    if (!hasMovedRef.current && longPressRef.current !== null) return;
 
     const newX = Math.min(Math.max(dragStartRef.current.posX + deltaX, 12), window.innerWidth - 76);
     const newY = Math.min(Math.max(dragStartRef.current.posY + deltaY, 50), window.innerHeight - 76);
@@ -74,11 +110,17 @@ export function DraggableAgentButton() {
     setPosition({ x: newX, y: newY });
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+  const finishPointer = (e: React.PointerEvent) => {
+    if (pointerIdRef.current !== e.pointerId) return false;
+    pointerIdRef.current = null;
+    clearLongPress();
     setIsDragging(false);
+    return true;
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!finishPointer(e)) return;
     try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
       localStorage.setItem("cms_agent_pos_x", String(position.x));
       localStorage.setItem("cms_agent_pos_y", String(position.y));
     } catch {
@@ -98,10 +140,14 @@ export function DraggableAgentButton() {
       {/* Movable Floating AI Icon Button */}
       <div
         data-cms-agent-ui
-        ref={dragRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={finishPointer}
+        onLostPointerCapture={finishPointer}
+        onContextMenu={(e) => {
+          if (window.matchMedia(MOBILE_VIEW).matches) e.preventDefault();
+        }}
         style={{
           left: `${position.x}px`,
           top: `${position.y}px`,
@@ -109,7 +155,7 @@ export function DraggableAgentButton() {
         }}
         className={`print:hidden fixed z-50 select-none cursor-grab active:cursor-grabbing transition-transform ${
           isDragging ? "scale-105 opacity-90" : "hover:scale-105"
-        }`}
+        } ${hiddenOnMobile ? "hidden lg:block" : ""}`}
         title="Haryana Police CMS AI Agent (Click to Open, Drag to Move)"
       >
         <div className="relative group">
@@ -119,6 +165,9 @@ export function DraggableAgentButton() {
           {/* Main Agent Button */}
           <button
             type="button"
+            onClick={(e) => {
+              if (e.detail === 0) setIsOpen((open) => !open);
+            }}
             className="relative flex items-center justify-center w-14 h-14 rounded-full bg-[#081225] border-2 border-indigo-400/80 shadow-2xl text-white overflow-hidden focus:outline-none"
           >
             {/* Haryana Police Badge Overlay */}

@@ -5857,10 +5857,8 @@ function RegisterFIRForm({ onReset }: { onReset: () => void }) {
           )}
 
         {/* BOTTOM NAVIGATION FOOTER */}
-        {/* FIR-01 fix: float the action bar above the 60px mobile bottom nav
-            (fixed bottom-0 z-40 in MobileBottomNav) so Previous/Next/Save/Register
-            are never painted over; desktop keeps the original bottom-0 position. */}
-        <div className="sticky bottom-15 z-20 lg:bottom-0 bg-white/95 backdrop-blur-xs border-t border-slate-200 p-3.5 rounded-xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* Keep the mobile actions above the bottom nav and its safe area. */}
+        <div className="sticky bottom-[calc(var(--cms-mobile-nav-height)+env(safe-area-inset-bottom,0px)+0.75rem+1px)] lg:bottom-0 z-20 bg-white/95 backdrop-blur-xs border-t border-slate-200 p-3.5 rounded-xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Step Indicator on Left */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500">

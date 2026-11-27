@@ -21,6 +21,7 @@ html.cms-theme-switching *::after {
 }
 
 :root {
+  --cms-mobile-nav-height: 3.75rem;
   --background: #fafafb;
   --foreground: #09090b;
   --surface: #ffffff;

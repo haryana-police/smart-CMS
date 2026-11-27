@@ -10,7 +10,6 @@ import {
   PlusCircle,
   BookOpen,
   UserCheck,
-  Car,
   Clock,
   LayoutGrid,
   Building,
@@ -32,6 +31,7 @@ interface MobileNavItem {
   href: string;
   icon: React.ElementType;
   isPrimaryAction?: boolean;
+  opensRegisterPrint?: boolean;
 }
 
 export function MobileBottomNav() {
@@ -79,7 +79,7 @@ export function MobileBottomNav() {
     { name: "GD Diary", href: "/general-diary", icon: BookOpen },
     { name: "Drafts", href: "/general-diary?tab=SUGGESTIONS_DRAFTS", icon: Sparkles },
     { name: "New GD", href: "/general-diary/new", icon: PlusCircle, isPrimaryAction: true },
-    { name: "Patrols", href: "/general-diary?type=PATROL_DEPARTURE_RETURN", icon: Car },
+    { name: "Register", href: "/general-diary?printRegister=1", icon: BookOpen, opensRegisterPrint: true },
     { name: "Modules", href: "/", icon: LayoutGrid },
   ];
 
@@ -155,15 +155,15 @@ export function MobileBottomNav() {
 
   return (
     <nav className="print:hidden lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0d1930]/95 backdrop-blur-sm border-t border-slate-200/80 dark:border-[#1e2c48] shadow-lg pb-safe">
-      <div className={cn("grid h-15 max-w-lg mx-auto items-center px-1", gridColsClass)}>
+      <div className={cn("grid h-[var(--cms-mobile-nav-height)] max-w-lg mx-auto items-center px-1", gridColsClass)}>
         {currentNav.map((item) => {
           const Icon = item.icon;
-          const isActive =
+          const isActive = !item.opensRegisterPrint && (
             item.href === "/"
               ? pathname === "/"
               : item.href.includes("?")
               ? pathname === item.href.split("?")[0]
-              : pathname === item.href;
+              : pathname === item.href);
 
           if (item.isPrimaryAction) {
             return (
@@ -187,6 +187,13 @@ export function MobileBottomNav() {
             <Link
               key={item.name}
               href={item.href}
+              onNavigate={(event) => {
+                if (!item.opensRegisterPrint || pathname !== "/general-diary") return;
+                event.preventDefault();
+                const url = new URL(window.location.href);
+                url.searchParams.set("printRegister", "1");
+                window.history.replaceState(null, "", url);
+              }}
               className={cn(
                 "flex flex-col items-center justify-center h-full min-h-[44px] py-1 text-center transition-colors active:scale-95",
                 isActive ? "text-red-700 font-semibold" : "text-slate-500 hover:text-slate-800"
