@@ -329,7 +329,7 @@ export default function LoginPage() {
           )}
 
           {/* Half Right: Demo Personas by District & Developer Access Card */}
-          {demo && (
+          {demo && !showOfficerPicker && (
             <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 sm:p-7 text-slate-900 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
