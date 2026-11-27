@@ -1696,31 +1696,33 @@ function ComplaintListContent() {
                   </select>
                 </div>
 
-                {/* 4. Compact Date Range Filter (Inline) */}
-                <div className="cms-date-range-container flex flex-wrap items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shrink-0 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#0b192c] transition-all">
+                {/* 4. Compact Date Range Filter (Single Inline Row — never stacks) */}
+                <div className="cms-date-range-container flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 shrink-0 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#0b192c] transition-all">
                   <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span className="text-[11px] font-semibold text-slate-500 shrink-0">From:</span>
-                  <DatePickerDDMMYYYY
-                    size="sm"
-                    max={getTodayIsoIST()}
-                    value={dateFrom}
-                    onValueChange={setDateFrom}
-                    placeholder="DD/MM/YYYY"
-                    title="Date from (DD/MM/YYYY)"
-                    className="w-[126px]"
-                  />
+                  <div className="w-[122px] shrink-0">
+                    <DatePickerDDMMYYYY
+                      size="sm"
+                      max={getTodayIsoIST()}
+                      value={dateFrom}
+                      onValueChange={setDateFrom}
+                      placeholder="DD/MM/YYYY"
+                      title="Date from (DD/MM/YYYY)"
+                    />
+                  </div>
                   <span className="text-slate-300 text-xs shrink-0">-</span>
                   <span className="text-[11px] font-semibold text-slate-500 shrink-0">To:</span>
-                  <DatePickerDDMMYYYY
-                    size="sm"
-                    min={dateFrom || undefined}
-                    max={getTodayIsoIST()}
-                    value={dateTo}
-                    onValueChange={setDateTo}
-                    placeholder="DD/MM/YYYY"
-                    title="Date to (DD/MM/YYYY)"
-                    className="w-[126px]"
-                  />
+                  <div className="w-[122px] shrink-0">
+                    <DatePickerDDMMYYYY
+                      size="sm"
+                      min={dateFrom || undefined}
+                      max={getTodayIsoIST()}
+                      value={dateTo}
+                      onValueChange={setDateTo}
+                      placeholder="DD/MM/YYYY"
+                      title="Date to (DD/MM/YYYY)"
+                    />
+                  </div>
                   {(dateFrom || dateTo) && (
                     <button
                       type="button"
